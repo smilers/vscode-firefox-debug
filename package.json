@@ -44,7 +44,7 @@
     "strip-json-comments": "3.1.1",
     "uuid": "^8.3.2",
     "vscode-debugadapter": "^1.51.0",
-    "vscode-uri": "^3.0.2"
+    "vscode-uri": "^3.0.3"
   },
   "devDependencies": {
     "@babel/cli": "^7.16.0",
