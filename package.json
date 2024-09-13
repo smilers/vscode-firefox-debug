@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@babel/polyfill": "^7.12.1",
-    "chokidar": "^3.5.3",
+    "chokidar": "^4.0.0",
     "core-js": "^3.32.2",
     "data-uri-to-buffer": "3.0.1",
     "debounce": "^1.2.1",
