@@ -1,14 +1,16 @@
+import { Log } from '../util/log';
 import * as path from 'path';
 import { ParsedAddonConfiguration } from '../configuration';
 import { RootActorProxy } from '../firefox/actorProxy/root';
 import { AddonsActorProxy } from '../firefox/actorProxy/addons';
 import { PreferenceActorProxy } from '../firefox/actorProxy/preference';
-import { ConsoleActorProxy } from '../firefox/actorProxy/console';
-import { WebExtensionActorProxy } from '../firefox/actorProxy/webExtension';
-import { TabActorProxy } from '../firefox/actorProxy/tab';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
 import { PopupAutohideEventBody } from '../../common/customEvents';
 import { isWindowsPlatform } from '../../common/util';
+import { TargetActorProxy } from '../firefox/actorProxy/target';
+import { DescriptorActorProxy } from '../firefox/actorProxy/descriptor';
+
+const log = Log.create('AddonManager');
 
 export const popupAutohidePreferenceKey = 'ui.popup.disable_autohide';
 
@@ -22,10 +24,10 @@ export class AddonManager {
 	private readonly config: ParsedAddonConfiguration;
 
 	private addonAttached = false;
-	private addonActor: TabActorProxy | undefined = undefined;
+	private descriptorActor: DescriptorActorProxy | undefined = undefined;
+	private targetActor: TargetActorProxy | undefined = undefined;
 
 	constructor(
-		private readonly enableCRAWorkaround: boolean,
 		private readonly debugSession: FirefoxDebugSession
 	) {
 		this.config = debugSession.config.addon!;
@@ -34,8 +36,7 @@ export class AddonManager {
 	public async sessionStarted(
 		rootActor: RootActorProxy,
 		addonsActor: AddonsActorProxy,
-		preferenceActor: PreferenceActorProxy,
-		useConnect: boolean
+		preferenceActor: PreferenceActorProxy
 	): Promise<void> {
 
 		const addonPath = isWindowsPlatform() ? path.normalize(this.config.path) : this.config.path;
@@ -44,7 +45,7 @@ export class AddonManager {
 			this.config.id = result.addon.id;
 		}
 
-		this.fetchAddonsAndAttach(rootActor, useConnect);
+		this.fetchAddonsAndAttach(rootActor);
 
 		if (this.config.popupAutohideButton) {
 			const popupAutohide = !(await preferenceActor.getBoolPref(popupAutohidePreferenceKey));
@@ -53,14 +54,14 @@ export class AddonManager {
 	}
 
 	public async reloadAddon(): Promise<void> {
-		if (!this.addonActor) {
+		if (!this.targetActor) {
 			throw 'Addon isn\'t attached';
 		}
 
-		await this.addonActor.reload();
+		await this.descriptorActor?.reload();
 	}
 
-	private async fetchAddonsAndAttach(rootActor: RootActorProxy, useConnect: boolean): Promise<void> {
+	private async fetchAddonsAndAttach(rootActor: RootActorProxy): Promise<void> {
 
 		if (this.addonAttached) return;
 
@@ -72,22 +73,13 @@ export class AddonManager {
 			if (addon.id === this.config.id) {
 				(async () => {
 
-					let consoleActor: ConsoleActorProxy;
-					let webExtensionActor = new WebExtensionActorProxy(
-						addon, this.enableCRAWorkaround, this.debugSession.pathMapper,
-						this.debugSession.firefoxDebugConnection);
+					this.descriptorActor = new DescriptorActorProxy(
+						addon.actor,
+						this.debugSession.firefoxDebugConnection
+					);
 
-					if (useConnect) {
-						[this.addonActor, consoleActor] = await webExtensionActor.connect();
-					} else {
-						[this.addonActor, consoleActor] = await webExtensionActor.getTarget();
-					}
+					await this.debugSession.attachDescriptor(this.descriptorActor, false);
 
-					let threadAdapter = await this.debugSession.attachTabOrAddon(
-						this.addonActor, consoleActor, 'Addon');
-					if (threadAdapter !== undefined) {
-						this.debugSession.attachConsole(consoleActor, threadAdapter);
-					}
 					this.addonAttached = true;
 				})();
 			}

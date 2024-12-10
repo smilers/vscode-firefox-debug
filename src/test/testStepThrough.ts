@@ -2,6 +2,7 @@ import { DebugClient } from 'vscode-debugadapter-testsupport';
 import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';
+import { delay } from '../common/util';
 
 describe('Stepping: The debugger', function() {
 
@@ -92,6 +93,8 @@ describe('Stepping: The debugger', function() {
 		dc.stepInRequest({ threadId: stoppedEvent.body.threadId! });
 		await util.receiveStoppedEvent(dc);
 
+		await delay(100);
+		
 		let stackTrace = await dc.stackTraceRequest({ threadId: stoppedEvent.body.threadId! });
 		let source = await dc.sourceRequest({
 			sourceReference: stackTrace.body.stackFrames[0].source!.sourceReference!
@@ -115,6 +118,8 @@ describe('Stepping: The debugger', function() {
 		dc.stepInRequest({ threadId: stoppedEvent.body.threadId! });
 		await util.receiveStoppedEvent(dc);
 
+		await delay(100);
+		
 		let stackTrace = await dc.stackTraceRequest({ threadId: stoppedEvent.body.threadId! });
 		let source = await dc.sourceRequest({
 			sourceReference: stackTrace.body.stackFrames[0].source!.sourceReference!

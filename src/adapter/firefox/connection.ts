@@ -4,6 +4,7 @@ import { DebugProtocolTransport } from './transport';
 import { ActorProxy } from './actorProxy/interface';
 import { RootActorProxy } from './actorProxy/root';
 import { PathMapper } from '../util/pathMapper';
+import { SourceMapsManager } from './sourceMaps/manager';
 
 let log = Log.create('DebugConnection');
 
@@ -14,6 +15,7 @@ export class DebugConnection {
 
 	private transport: DebugProtocolTransport;
 	private actors: Map<string, ActorProxy>;
+	public readonly sourceMaps: SourceMapsManager;
 	public readonly rootActor: RootActorProxy;
 
 	constructor(
@@ -23,7 +25,8 @@ export class DebugConnection {
 	) {
 
 		this.actors = new Map<string, ActorProxy>();
-		this.rootActor = new RootActorProxy(enableCRAWorkaround, pathMapper, this);
+		this.sourceMaps = new SourceMapsManager(pathMapper, this);
+		this.rootActor = new RootActorProxy(enableCRAWorkaround, this);
 		this.transport = new DebugProtocolTransport(socket);
 
 		this.transport.on('message', (response: FirefoxDebugProtocol.Response) => {

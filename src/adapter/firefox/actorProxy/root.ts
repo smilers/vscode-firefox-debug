@@ -1,11 +1,8 @@
 import { Log } from '../../util/log';
 import { EventEmitter } from 'events';
 import { PendingRequests, PendingRequest } from '../../util/pendingRequests';
-import { PathMapper } from '../../util/pathMapper';
 import { ActorProxy } from './interface';
-import { TabActorProxy } from './tab';
-import { TabDescriptorActorProxy } from './tabDescriptor';
-import { ConsoleActorProxy } from './console';
+import { DescriptorActorProxy } from './descriptor';
 import { PreferenceActorProxy } from './preference';
 import { AddonsActorProxy } from './addons';
 import { DeviceActorProxy } from './device';
@@ -26,16 +23,14 @@ export interface FetchRootResult {
  */
 export class RootActorProxy extends EventEmitter implements ActorProxy {
 
-	private tabs = new Map<string, [TabActorProxy, ConsoleActorProxy]>();
+	private tabs = new Map<string, DescriptorActorProxy>();
 	private pendingRootRequest?: PendingRequest<FetchRootResult>;
 	private rootPromise?: Promise<FetchRootResult>;
-	private pendingProcessRequests = new PendingRequests<[TabActorProxy, ConsoleActorProxy]>();
-	private pendingTabsRequests = new PendingRequests<Map<string, [TabActorProxy, ConsoleActorProxy]>>();
+	private pendingTabsRequests = new PendingRequests<Map<string, DescriptorActorProxy>>();
 	private pendingAddonsRequests = new PendingRequests<FirefoxDebugProtocol.Addon[]>();
 
 	constructor(
 		private readonly enableCRAWorkaround: boolean,
-		private readonly pathMapper: PathMapper,
 		private readonly connection: DebugConnection
 	) {
 		super();
@@ -60,21 +55,11 @@ export class RootActorProxy extends EventEmitter implements ActorProxy {
 		return this.rootPromise;
 	}
 
-	public fetchProcess(): Promise<[TabActorProxy, ConsoleActorProxy]> {
-
-		log.debug('Fetching process');
-
-		return new Promise<[TabActorProxy, ConsoleActorProxy]>((resolve, reject) => {
-			this.pendingProcessRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ to: this.name, type: 'getProcess' });
-		})
-	}
-
-	public fetchTabs(): Promise<Map<string, [TabActorProxy, ConsoleActorProxy]>> {
+	public fetchTabs(): Promise<Map<string, DescriptorActorProxy>> {
 
 		log.debug('Fetching tabs');
 
-		return new Promise<Map<string, [TabActorProxy, ConsoleActorProxy]>>((resolve, reject) => {
+		return new Promise<Map<string, DescriptorActorProxy>>((resolve, reject) => {
 			this.pendingTabsRequests.enqueue({ resolve, reject });
 			this.connection.sendRequest({ to: this.name, type: 'listTabs' });
 		})
@@ -99,7 +84,7 @@ export class RootActorProxy extends EventEmitter implements ActorProxy {
 		} else if (response['tabs']) {
 
 			let tabsResponse = <FirefoxDebugProtocol.TabsResponse>response;
-			let currentTabs = new Map<string, [TabActorProxy, ConsoleActorProxy]>();
+			let currentTabs = new Map<string, DescriptorActorProxy>();
 
 			// sometimes Firefox returns 0 tabs if the listTabs request was sent 
 			// shortly after launching it
@@ -115,55 +100,37 @@ export class RootActorProxy extends EventEmitter implements ActorProxy {
 
 			log.debug(`Received ${tabsResponse.tabs.length} tabs`);
 
-			// convert the Tab array into a map of TabActorProxies, re-using already 
+			// convert the Tab array into a map of TabDescriptorActorProxies, re-using already 
 			// existing proxies and emitting tabOpened events for new ones
-			Promise.all(tabsResponse.tabs.map(async tab => {
-
-				let actorsForTab: [TabActorProxy, ConsoleActorProxy];
+			for (const tab of tabsResponse.tabs) {
+				let tabDescriptorActor: DescriptorActorProxy;
 				if (this.tabs.has(tab.actor)) {
 
-					actorsForTab = this.tabs.get(tab.actor)!;
+					tabDescriptorActor = this.tabs.get(tab.actor)!;
 
 				} else {
 
 					log.debug(`Tab ${tab.actor} opened`);
 
-					if ((tab as FirefoxDebugProtocol.Tab).consoleActor) {
+					tabDescriptorActor = new DescriptorActorProxy(tab.actor, this.connection);
 
-						const _tab = tab as FirefoxDebugProtocol.Tab;
-						actorsForTab = [
-							new TabActorProxy(tab.actor, _tab.title, _tab.url,
-								this.enableCRAWorkaround, this.pathMapper, this.connection),
-							new ConsoleActorProxy(_tab.consoleActor, this.connection)
-						];
-
-					} else {
-
-						const tabDescriptorActor = new TabDescriptorActorProxy(
-							tab.actor, this.enableCRAWorkaround, this.pathMapper, this.connection);
-						actorsForTab = await tabDescriptorActor.getTarget();
-
-					}
-
-					this.emit('tabOpened', actorsForTab);
+					this.emit('tabOpened', tabDescriptorActor);
 				}
 
-				currentTabs.set(tab.actor, actorsForTab);
+				currentTabs.set(tab.actor, tabDescriptorActor);
+			}
 
-			})).then(() => {
-
-				// emit tabClosed events for tabs that have disappeared
-				this.tabs.forEach((actorsForTab, tabActorName) => {
-					if (!currentTabs.has(tabActorName)) {
-						log.debug(`Tab ${tabActorName} closed`);
-						this.emit('tabClosed', actorsForTab);
-					}
-				});
-
-				this.tabs = currentTabs;
-		
-				this.pendingTabsRequests.resolveOne(currentTabs);
+			// emit tabClosed events for tabs that have disappeared
+			this.tabs.forEach((actorsForTab, tabActorName) => {
+				if (!currentTabs.has(tabActorName)) {
+					log.debug(`Tab ${tabActorName} closed`);
+					this.emit('tabClosed', actorsForTab);
+				}
 			});
+
+			this.tabs = currentTabs;
+	
+			this.pendingTabsRequests.resolveOne(currentTabs);
 
 		} else if (response['preferenceActor']) {
 
@@ -214,17 +181,6 @@ export class RootActorProxy extends EventEmitter implements ActorProxy {
 			
 			this.emit('addonListChanged');
 
-		} else if (response['form']) {
-
-			let processResponse = <FirefoxDebugProtocol.ProcessResponse>response;
-			log.debug('Received getProcess response');
-			this.pendingProcessRequests.resolveOne([
-				new TabActorProxy(
-					processResponse.form.actor, 'Browser', processResponse.form.url,
-					this.enableCRAWorkaround, this.pathMapper, this.connection),
-				new ConsoleActorProxy(processResponse.form.consoleActor, this.connection)
-			]);
-
 		} else {
 
 			if (response['type'] === 'forwardingCancelled') {
@@ -240,11 +196,11 @@ export class RootActorProxy extends EventEmitter implements ActorProxy {
 		this.on('init', cb);
 	}
 
-	public onTabOpened(cb: (actorsForTab: [TabActorProxy, ConsoleActorProxy]) => void) {
+	public onTabOpened(cb: (actorsForTab: DescriptorActorProxy) => void) {
 		this.on('tabOpened', cb);
 	}
 
-	public onTabClosed(cb: (actorsForTab: [TabActorProxy, ConsoleActorProxy]) => void) {
+	public onTabClosed(cb: (actorsForTab: DescriptorActorProxy) => void) {
 		this.on('tabClosed', cb);
 	}
 

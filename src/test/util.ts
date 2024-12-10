@@ -176,9 +176,15 @@ export async function setBreakpoints(
 
 	if (waitForVerification) {
 		let unverified = result.body.breakpoints.filter(breakpoint => !breakpoint.verified).length;
-		while (unverified > 0) {
-			await receiveBreakpointEvent(dc);
-			unverified--;
+		if (unverified > 0) {
+			await new Promise<void>(resolve => {
+				dc.on('breakpoint', () => {
+					unverified--;
+					if (unverified === 0) {
+						resolve();
+					}
+				});
+			});
 		}
 	}
 
@@ -262,6 +268,9 @@ export async function findTabThread(dc: DebugClient): Promise<number> {
 
 export async function setConsoleThread(dc: DebugClient, threadId: number): Promise<void> {
 	try {
-		await dc.stackTraceRequest({ threadId });
+		// TODO explain (only used for side effect that the "active" thread is set)
+		// await dc.stackTraceRequest({ threadId });
+		await dc.pauseRequest({ threadId });
+		await dc.continueRequest({ threadId });
 	} catch(e) {}
 }

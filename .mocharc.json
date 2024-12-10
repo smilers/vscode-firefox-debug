@@ -1,5 +1,5 @@
 {
-	"require": ["tsx", "src/test/setup.ts"],
+	"require": ["ts-node/register/transpile-only", "src/test/setup.ts"],
 	"timeout": 20000,
 	"slow": 6000,
 	"exit": true,

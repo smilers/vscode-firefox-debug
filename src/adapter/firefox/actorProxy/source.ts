@@ -1,8 +1,7 @@
 import { Log } from '../../util/log';
 import { DebugConnection } from '../connection';
-import { PendingRequests, PendingRequest } from '../../util/pendingRequests';
-import { ActorProxy } from './interface';
 import { MappedLocation, Range } from '../../location';
+import { BaseActorProxy } from './base';
 
 let log = Log.create('SourceActorProxy');
 
@@ -22,23 +21,13 @@ export interface ISourceActorProxy {
  * ([docs](https://github.com/mozilla/gecko-dev/blob/master/devtools/docs/backend/protocol.md#loading-script-sources),
  * [spec](https://github.com/mozilla/gecko-dev/blob/master/devtools/shared/specs/source.js))
  */
-export class SourceActorProxy implements ActorProxy, ISourceActorProxy {
+export class SourceActorProxy extends BaseActorProxy implements ISourceActorProxy {
 
-	private pendingGetBreakableLinesRequest?: PendingRequest<number[]>;
-	private getBreakableLinesPromise?: Promise<number[]>;
-	private pendingGetBreakpointPositionsRequests = new PendingRequests<FirefoxDebugProtocol.BreakpointPositions>();
-	private pendingFetchSourceRequests = new PendingRequests<FirefoxDebugProtocol.Grip>();
-	private pendingBlackboxRequests = new PendingRequests<void>();
-	
 	constructor(
 		public readonly source: FirefoxDebugProtocol.Source,
-		private connection: DebugConnection
+		connection: DebugConnection
 	) {
-		this.connection.register(this);
-	}
-
-	public get name() {
-		return this.source.actor;
+		super(source.actor, [], connection);
 	}
 
 	public get url() {
@@ -46,23 +35,17 @@ export class SourceActorProxy implements ActorProxy, ISourceActorProxy {
 	}
 
 	public getBreakableLines(): Promise<number[]> {
+		log.debug(`Fetching breakableLines of ${this.url}`);
 
-		if (!this.getBreakableLinesPromise) {
-
-			log.debug(`Fetching breakableLines of ${this.url}`);
-
-			this.getBreakableLinesPromise = new Promise<number[]>((resolve, reject) => {
-				this.pendingGetBreakableLinesRequest = { resolve, reject };
-				this.connection.sendRequest({ to: this.name, type: 'getBreakableLines' });
-			});
-		}
-
-		return this.getBreakableLinesPromise;
+		return this.sendCachedRequest(
+			'getBreakableLines',
+			{ type: 'getBreakableLines' },
+			(response: FirefoxDebugProtocol.GetBreakableLinesResponse) => response.lines
+		);
 	}
 
 	public async getBreakableLocations(line: number): Promise<MappedLocation[]> {
-
-		log.debug(`Fetching breakpointPositions of ${this.url}`);
+		log.debug(`Fetching breakpointPositions of line ${line} in ${this.url}`);
 
 		const positions = await this.getBreakpointPositionsForRange({
 			start: { line, column: 0 },
@@ -77,96 +60,38 @@ export class SourceActorProxy implements ActorProxy, ISourceActorProxy {
 	}
 
 	public getBreakpointPositionsForRange(range: Range): Promise<FirefoxDebugProtocol.BreakpointPositions> {
-
 		log.debug(`Fetching breakpoint positions of ${this.url} for range: ${JSON.stringify(range)}`);
 
-		return new Promise<FirefoxDebugProtocol.BreakpointPositions>((resolve, reject) => {
-			this.pendingGetBreakpointPositionsRequests.enqueue({ resolve, reject });
-
-			const request: any = { to: this.name, type: 'getBreakpointPositionsCompressed' };
-			if (range) {
-				request.query = {
+		return this.sendCachedRequest(
+			`getBreakpointPositionsCompressed_${range.start.line}:${range.start.column}-${range.end.line}:${range.end.line}`,
+			{
+				type: 'getBreakpointPositionsCompressed',
+				query: {
 					start: { line: range.start.line, column: range.start.column },
 					end: { line: range.end.line, column: range.end.column },
-				};
-			}
-
-			this.connection.sendRequest(request);
-		});
+				},
+			},
+			(response: FirefoxDebugProtocol.GetBreakpointPositionsCompressedResponse) => response.positions
+		);
 	}
 
 	public fetchSource(): Promise<FirefoxDebugProtocol.Grip> {
-
 		log.debug(`Fetching source of ${this.url}`);
 
-		return new Promise<FirefoxDebugProtocol.Grip>((resolve, reject) => {
-			this.pendingFetchSourceRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ to: this.name, type: 'source' });
-		});
+		return this.sendCachedRequest(
+			'source',
+			{ type: 'source' },
+			(response: FirefoxDebugProtocol.SourceResponse) => response.source
+		);
 	}
 
-	public setBlackbox(blackbox: boolean): Promise<void> {
-
+	public async setBlackbox(blackbox: boolean): Promise<void> {
 		log.debug(`Setting blackboxing of ${this.url} to ${blackbox}`);
 
-		this.source.isBlackBoxed = blackbox;
-
-		return new Promise<void>((resolve, reject) => {
-			let type = blackbox ? 'blackbox' : 'unblackbox';
-			this.pendingBlackboxRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ to: this.name, type });
-		});
+		await this.sendRequest({ type: blackbox ? 'blackbox' : 'unblackbox' });
 	}
 
-	public dispose(): void {
-		this.connection.unregister(this);
-	}
-
-	public receiveResponse(response: FirefoxDebugProtocol.Response): void {
-
-		if (response['lines'] !== undefined) {
-
-			log.debug('Received getBreakableLines response');
-
-			let breakableLinesResponse = <FirefoxDebugProtocol.GetBreakableLinesResponse>response;
-			if (this.pendingGetBreakableLinesRequest) {
-				this.pendingGetBreakableLinesRequest.resolve(breakableLinesResponse.lines);
-				this.pendingGetBreakableLinesRequest = undefined;
-			} else {
-				log.warn(`Got BreakableLines for ${this.url} without a corresponding request`);
-			}
-
-		} else if (response['positions'] !== undefined) {
-
-			log.debug('Received getBreakpointPositions response');
-
-			let breakpointPositionsResponse = <FirefoxDebugProtocol.GetBreakpointPositionsCompressedResponse>response;
-			this.pendingGetBreakpointPositionsRequests.resolveOne(breakpointPositionsResponse.positions);
-
-		} else if (response['source'] !== undefined) {
-
-			log.debug('Received fetchSource response');
-			let grip = <FirefoxDebugProtocol.Grip>response['source'];
-			this.pendingFetchSourceRequests.resolveOne(grip);
-
-		} else if (response['error'] === 'noSuchActor') {
-
-			log.error(`No such actor ${JSON.stringify(this.name)}`);
-			this.pendingFetchSourceRequests.rejectAll('No such actor');
-
-		} else {
-
-			let propertyCount = Object.keys(response).length;
-			if ((propertyCount === 1) || ((propertyCount === 2) && (response['pausedInSource'] !== undefined))) {
-
-				log.debug('Received (un)blackbox response');
-				this.pendingBlackboxRequests.resolveOne(undefined);
-
-			} else {
-
-				log.warn("Unknown message from SourceActor: " + JSON.stringify(response));
-
-			}
-		}
+	handleEvent(event: FirefoxDebugProtocol.Event): void {
+		log.warn("Unknown message from SourceActor: " + JSON.stringify(event));
 	}
 }

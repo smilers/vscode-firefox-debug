@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';
 import { DebugProtocol } from 'vscode-debugprotocol';
+import { delay } from '../common/util';
 
 describe('Hitting breakpoints: The debugger', function() {
 
@@ -130,6 +131,7 @@ describe('Hitting breakpoints: The debugger', function() {
 		assert.equal(stackTrace.body.stackFrames[0].line, 8);
 
 		await util.setBreakpoints(dc, sourcePath, [ 12 ]);
+		await delay(100);
 		await util.runCommandAndReceiveStoppedEvent(dc, () => dc.continueRequest({ threadId }));
 		stackTrace = await dc.stackTraceRequest({ threadId });
 

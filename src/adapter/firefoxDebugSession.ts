@@ -11,8 +11,6 @@ import { Log } from './util/log';
 import { AddonManager } from './adapter/addonManager';
 import { launchFirefox, openNewTab } from './firefox/launch';
 import { DebugConnection } from './firefox/connection';
-import { TabActorProxy } from './firefox/actorProxy/tab';
-import { WorkerActorProxy } from './firefox/actorProxy/worker';
 import { ObjectGripActorProxy } from './firefox/actorProxy/objectGrip';
 import { LongStringGripActorProxy } from './firefox/actorProxy/longString';
 import { AddonsActorProxy } from './firefox/actorProxy/addons';
@@ -29,7 +27,6 @@ import { ConsoleAPICallAdapter } from './adapter/consoleAPICall';
 import { BreakpointsManager } from './adapter/breakpointsManager';
 import { DataBreakpointsManager } from './adapter/dataBreakpointsManager';
 import { SkipFilesManager } from './adapter/skipFilesManager';
-import { ThreadPauseCoordinator } from './coordinator/threadPause';
 import { ParsedConfiguration } from './configuration';
 import { PathMapper } from './util/pathMapper';
 import { isWindowsPlatform as detectWindowsPlatform, delay } from '../common/util';
@@ -37,6 +34,13 @@ import { connect, waitForSocket } from './util/net';
 import { NewSourceEventBody, ThreadStartedEventBody, ThreadExitedEventBody, RemoveSourcesEventBody } from '../common/customEvents';
 import { PreferenceActorProxy } from './firefox/actorProxy/preference';
 import { DeviceActorProxy } from './firefox/actorProxy/device';
+import { TargetActorProxy } from './firefox/actorProxy/target';
+import { BreakpointListActorProxy } from './firefox/actorProxy/breakpointList';
+import { SourceMapsManager } from './firefox/sourceMaps/manager';
+import { SourcesManager } from './adapter/sourcesManager';
+import { ThreadConfigurationActorProxy } from './firefox/actorProxy/threadConfiguration';
+import { DescriptorAdapter } from './adapter/descriptor';
+import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
@@ -45,12 +49,13 @@ export class FirefoxDebugSession {
 
 	public readonly isWindowsPlatform = detectWindowsPlatform();
 	public readonly pathMapper: PathMapper;
+	public readonly sources: SourcesManager;
+	public sourceMaps!: SourceMapsManager;
 	public readonly breakpointsManager: BreakpointsManager;
 	public readonly dataBreakpointsManager: DataBreakpointsManager;
 	public readonly skipFilesManager: SkipFilesManager;
 	public readonly addonManager?: AddonManager;
 	private reloadWatcher?: chokidar.FSWatcher;
-	private threadPauseCoordinator = new ThreadPauseCoordinator();
 
 	private firefoxProc?: ChildProcess;
 	private firefoxClosedPromise?: Promise<void>;
@@ -61,16 +66,20 @@ export class FirefoxDebugSession {
 	public addonsActor?: AddonsActorProxy;
 	public deviceActor!: DeviceActorProxy;
 
-	public readonly tabs = new Registry<TabActorProxy>();
+	public readonly descriptors = new Registry<DescriptorAdapter>();
 	public readonly threads = new Registry<ThreadAdapter>();
-	public readonly sources = new Registry<SourceAdapter>();
 	public readonly frames = new Registry<FrameAdapter>();
 	public readonly variablesProviders = new Registry<VariablesProvider>();
+	public readonly breakpointLists = new Registry<BreakpointListActorProxy>();
+	public readonly threadConfigurators = new Registry<ThreadConfigurationActorProxy>();
+	private readonly threadsByTargetActorName = new Map<string, ThreadAdapter>();
 
-	private exceptionBreakpoints: ExceptionBreakpoints = ExceptionBreakpoints.Uncaught;
+	public threadConfiguration: Pick<FirefoxDebugProtocol.ThreadConfiguration, 'pauseOnExceptions' | 'ignoreCaughtExceptions'> = {
+		pauseOnExceptions: true,
+		ignoreCaughtExceptions: true
+	};
 
 	private reloadTabs = false;
-	private attachToNextTab = false;
 
 	/**
 	 * The ID of the last thread that the user interacted with. This thread will be used when the
@@ -80,16 +89,15 @@ export class FirefoxDebugSession {
 
 	public constructor(
 		public readonly config: ParsedConfiguration,
-		private readonly sendEvent: (ev: DebugProtocol.Event) => void
+		public readonly sendEvent: (ev: DebugProtocol.Event) => void
 	) {
 		this.pathMapper = new PathMapper(this.config.pathMappings, this.config.addon);
-		this.breakpointsManager = new BreakpointsManager(
-			this.threads, this.config.suggestPathMappingWizard, this.sendEvent
-		);
+		this.sources = new SourcesManager(this.pathMapper);
+		this.breakpointsManager = new BreakpointsManager(this);
 		this.dataBreakpointsManager = new DataBreakpointsManager(this.variablesProviders);
-		this.skipFilesManager = new SkipFilesManager(this.config.filesToSkip, this.threads);
+		this.skipFilesManager = new SkipFilesManager(this.config.filesToSkip, this.sources, this.threads);
 		if (this.config.addon) {
-			this.addonManager = new AddonManager(config.enableCRAWorkaround, this);
+			this.addonManager = new AddonManager(this);
 		}
 	}
 
@@ -103,33 +111,27 @@ export class FirefoxDebugSession {
 			let socket: Socket;
 			try {
 				socket = await this.connectToFirefox();
-			} catch(err) {
-				reject(err);
+			} catch(err: any) {
+				if (!err?.message && this.config.attach) {
+					reject(new Error(`Couldn't connect to Firefox - please ensure it is running and listening on port ${this.config.attach.port} for debugger connections`));
+				} else {
+					reject(err);
+				}
 				return;
 			}
 
 			this.firefoxDebugConnection = new DebugConnection(this.config.enableCRAWorkaround, this.pathMapper, socket);
+			this.sourceMaps = this.firefoxDebugConnection.sourceMaps;
 			let rootActor = this.firefoxDebugConnection.rootActor;
 
 			// attach to all tabs, register the corresponding threads and inform VSCode about them
-			rootActor.onTabOpened(async ([tabActor, consoleActor]) => {
+			rootActor.onTabOpened(async (tabDescriptorActor) => {
 
-				log.info(`Tab opened with url ${tabActor.url}`);
-
-				if (!this.attachToNextTab &&
-					(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(tabActor.url)) ||
-					 this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(tabActor.url)))) {
-					log.info('Not attaching to this tab');
-					return;
+				if (this.reloadTabs) {
+					await tabDescriptorActor.reload();
 				}
 
-				this.attachToNextTab = false;
-
-				let tabId = this.tabs.register(tabActor);
-				let threadAdapter = await this.attachTabOrAddon(tabActor, consoleActor, `Tab ${tabId}`, tabId);
-				if (threadAdapter !== undefined) {
-					this.attachConsole(consoleActor, threadAdapter);
-				}
+				await this.attachDescriptor(tabDescriptorActor);
 			});
 
 			rootActor.onTabListChanged(() => {
@@ -152,10 +154,7 @@ export class FirefoxDebugSession {
 
 				if (this.addonManager) {
 					if (actors.addons) {
-						this.addonManager.sessionStarted(
-							rootActor, actors.addons, actors.preference,
-							!!initialResponse.traits.webExtensionAddonConnect
-						);
+						this.addonManager.sessionStarted(rootActor, actors.addons, actors.preference);
 					} else {
 						reject('No AddonsActor received from Firefox');
 					}
@@ -165,8 +164,7 @@ export class FirefoxDebugSession {
 
 				this.reloadTabs = false;
 
-				if (this.config.attach && (this.tabs.count === 0)) {
-					this.attachToNextTab = true;
+				if (this.config.attach && (this.threads.count === 0)) {
 					if (!await openNewTab(this.config.attach, await this.deviceActor.getDescription())) {
 						reject('None of the tabs opened in Firefox match the given URL. If you specify the path to Firefox by setting "firefoxExecutable" in your attach configuration, a new tab for the given URL will be opened automatically.');
 						return;
@@ -205,8 +203,8 @@ export class FirefoxDebugSession {
 					reload = () => {
 						log.debug('Reloading tabs');
 
-						for (let [, tabActor] of this.tabs) {
-							tabActor.reload();
+						for (let [, descriptor] of this.descriptors) {
+							descriptor.descriptorActor.reload();
 						}
 					}
 				}
@@ -234,10 +232,13 @@ export class FirefoxDebugSession {
 
 	public setExceptionBreakpoints(exceptionBreakpoints: ExceptionBreakpoints) {
 
-		this.exceptionBreakpoints = exceptionBreakpoints;
+		this.threadConfiguration = {
+			pauseOnExceptions: (exceptionBreakpoints !== ExceptionBreakpoints.None),
+			ignoreCaughtExceptions: (exceptionBreakpoints !== ExceptionBreakpoints.All)
+		};
 
-		for (let [, threadAdapter] of this.threads) {
-			threadAdapter.setExceptionBreakpoints(this.exceptionBreakpoints);
+		for (let [, threadConfigurator] of this.threadConfigurators) {
+			threadConfigurator.updateConfiguration(this.threadConfiguration);
 		}
 	}
 
@@ -311,9 +312,6 @@ export class FirefoxDebugSession {
 			}
 
 			socket = await waitForSocket(this.config.launch!.port, this.config.launch!.timeout);
-
-			// we ignore the tabFilter for the first tab after launching Firefox
-			this.attachToNextTab = true;
 		}
 
 		return socket;
@@ -368,161 +366,195 @@ export class FirefoxDebugSession {
 		}
 	}
 
-	public async attachTabOrAddon(
-		tabActor: TabActorProxy,
-		consoleActor: ConsoleActorProxy,
-		threadName: string,
-		tabId?: number
-	): Promise<ThreadAdapter | undefined> {
+	public async attachDescriptor(descriptorActor: DescriptorActorProxy, isTab = true) {
+		const watcherActor = await descriptorActor.getWatcher();
+		const [configurator, breakpointList] = await Promise.all([
+			watcherActor.getThreadConfiguration(),
+			watcherActor.getBreakpointList()
+		]);
 
-		let reload = (tabId != null) && this.reloadTabs;
+		const adapter = new DescriptorAdapter(
+			this.descriptors, this.threadConfigurators, this.breakpointLists,
+			descriptorActor, watcherActor, configurator, breakpointList
+		);
 
-		let threadActor: IThreadActorProxy;
-		try {
-			threadActor = await tabActor.attach();
-		} catch (err) {
-			log.error(`Failed attaching to tab: ${err}`);
-			return undefined;
+		if (isTab) {
+			log.info(`Tab ${adapter.id} opened`);
 		}
 
-		log.debug(`Attached to tab ${tabActor.name}`);
+		descriptorActor.onDestroyed(() => {
+			adapter.dispose();
+		});
 
-		let threadAdapter = new ThreadAdapter(threadActor, consoleActor, this.threadPauseCoordinator,
-			threadName, () => tabActor.url, this);
+		watcherActor.onTargetAvailable(async ([targetActor, threadActor, consoleActor, url]) => {
+			if (isTab &&
+				(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(url)) ||
+				 this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(url)))) {
+				log.info('Not attaching to this thread');
+				return;
+			}
+
+			const threadAdapter = await this.attachThread(targetActor, threadActor, consoleActor, `Tab ${adapter.id}`, url);
+			adapter.threads.add(threadAdapter);
+		});
+
+		watcherActor.onTargetDestroyed(targetActorName => {
+			const threadAdapter = this.threadsByTargetActorName.get(targetActorName);
+			if (!threadAdapter) {
+				log.warn(`Unknown target actor ${targetActorName}`);
+				return;
+			}
+			this.threadsByTargetActorName.delete(targetActorName);
+	
+			adapter.threads.delete(threadAdapter);
+			threadAdapter.dispose();
+		});
+
+		await Promise.all([
+			watcherActor.watchTargets('frame'),
+			watcherActor.watchTargets('worker'),
+			watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']),
+			configurator.updateConfiguration(this.threadConfiguration)
+		]);
+	}
+
+	private async attachThread(
+		targetActor: TargetActorProxy,
+		threadActor: IThreadActorProxy,
+		consoleActor: ConsoleActorProxy,
+		name: string,
+		url: string
+	) {
+		const threadAdapter = new ThreadAdapter(threadActor, targetActor, consoleActor, name, url, this);
+		this.threadsByTargetActorName.set(targetActor.name, threadAdapter);
 
 		this.sendThreadStartedEvent(threadAdapter);
 
-		this.attachThread(threadAdapter, threadActor.name);
-
-		tabActor.onDidNavigate(() => {
-			this.sendEvent(new ThreadEvent('started', threadAdapter!.id));
-		});
-
-		tabActor.onFramesDestroyed(() => {
-			this.sendEvent(new Event('removeSources', <RemoveSourcesEventBody>{
-				threadId: threadAdapter.id
-			}));
-			if (this.config.clearConsoleOnReload) {
-				this.sendEvent(new OutputEvent('\x1b[2J'));
+		targetActor.onConsoleMessages(async messages => {
+			for (const message of messages) {
+				await this.sendConsoleMessage(message, threadAdapter);
 			}
 		});
 
-		if (tabId != null) {
+		targetActor.onErrorMessages(async messages => {
+			for (const { pageError } of messages) {
+				consoleActorLog.debug(`Page Error: ${JSON.stringify(pageError)}`);
 
-			let nextWorkerId = 1;
-			tabActor.onWorkerStarted(async (workerActor) => {
+				if (pageError.category === 'content javascript') {
+	
+					let category = pageError.exception ? 'stderr' : 'stdout';
+					let outputEvent = new OutputEvent(pageError.errorMessage + '\n', category);
+					await this.addLocation(outputEvent, pageError.sourceName, pageError.lineNumber, pageError.columnNumber);
+	
+					this.sendEvent(outputEvent);
+				}
+			}
+		});
 
-				log.info(`Worker started with url ${tabActor.url}`);
+		targetActor.onSources(sources => {
+			for (const source of sources) {
+				this.attachSource(source, threadAdapter);
+			}
+		});
 
-				let workerId = nextWorkerId++;
+		targetActor.onThreadState(async event => {
+			if (event.state === 'paused') {
+
+				await this.sourceMaps.applySourceMapToFrame(event.frame!);
+				const sourceLocation = event.frame!.where;
 
 				try {
-					await this.attachWorker(workerActor, tabId, workerId);
-				} catch (err) {
-					log.error(`Failed attaching to worker: ${err}`);
+	
+					const sourceAdapter = await this.sources.getAdapterForActor(sourceLocation.actor);
+
+					if (sourceAdapter.isBlackBoxed) {
+	
+						// skipping (or blackboxing) source files is usually done by Firefox itself,
+						// but when the debugger hits an exception in a source that was just loaded and
+						// should be skipped, we may not have been able to tell Firefox that we want
+						// to skip this file, so we have to do it here
+						threadAdapter.resume();
+						return;
+	
+					}
+	
+					if ((event.why?.type === 'breakpoint') &&
+						event.why.actors && (event.why.actors.length > 0) &&
+						sourceAdapter.path
+					) {
+	
+						const breakpointInfo = this.breakpointsManager.getBreakpoints(sourceAdapter.path)?.find(bpInfo =>
+							bpInfo.actualLocation && bpInfo.actualLocation.line === sourceLocation.line && bpInfo.actualLocation.column === sourceLocation.column
+						);
+	
+						if (breakpointInfo?.hitLimit) {
+	
+							// Firefox doesn't have breakpoints with hit counts, so we have to
+							// implement this here
+							breakpointInfo.hitCount++;
+							if (breakpointInfo.hitCount < breakpointInfo.hitLimit) {
+	
+								threadAdapter.resume();
+								return;
+	
+							}
+						}
+					}
+				} catch(err) {
+					log.warn(String(err));
 				}
-			});
-
-			tabActor.onWorkerListChanged(() => tabActor.fetchWorkers());
-			tabActor.fetchWorkers();
-
-			tabActor.onDetached(() => {
-
-				this.threadPauseCoordinator.threadTerminated(threadAdapter.id, threadAdapter.name);
-
-				if (this.threads.has(threadAdapter.id)) {
-					this.threads.unregister(threadAdapter.id);
-					this.sendThreadExitedEvent(threadAdapter);
+	
+				if (event.why?.type === 'exception') {
+	
+					let frames = await threadAdapter.fetchAllStackFrames();
+					// TODO use the frame from the paused event?
+					let startFrame = (frames.length > 0) ? frames[frames.length - 1] : undefined;
+					if (startFrame) {
+						try {
+	
+							const sourceAdapter = await this.sources.getAdapterForActor(startFrame.frame.where.actor);
+	
+							if (sourceAdapter.introductionType === 'debugger eval') {
+	
+								// skip exceptions triggered by debugger eval code
+								threadAdapter.resume();
+								return;
+		
+							}
+						} catch(err) {
+							log.warn(String(err));
+						}
+					}
 				}
+	
+				threadAdapter.threadPausedReason = event.why;
+				// pre-fetch the stackframes, we're going to need them later
+				threadAdapter.fetchAllStackFrames();
 
-				threadAdapter.dispose();
-
-				this.tabs.unregister(tabId);
-
-				tabActor.dispose();
-			});
-		}
-
-		try {
-
-			await threadAdapter.init(this.exceptionBreakpoints);
-
-			if (reload) {
-				await tabActor.reload();
+				log.info(`Thread ${threadActor.name} paused , reason: ${event.why?.type}`);
+				this.sendStoppedEvent(threadAdapter, event.why);
 			}
-
-			return threadAdapter;
-
-		} catch (err) {
-			log.info(`Failed attaching to tab: ${err}`);
-			return undefined;
-		}
-	}
-
-	private async attachWorker(workerActor: WorkerActorProxy, tabId: number, workerId: number): Promise<void> {
-
-		let [threadActor, consoleActor] = await workerActor.connect();
-
-		log.debug(`Attached to worker ${workerActor.name}`);
-
-		let threadAdapter = new ThreadAdapter(threadActor, consoleActor, this.threadPauseCoordinator,
-			`Worker ${tabId}/${workerId}`, () => workerActor.url, this);
-
-		this.sendThreadStartedEvent(threadAdapter);
-
-		this.attachThread(threadAdapter, threadActor.name);
-
-		await threadAdapter.init(this.exceptionBreakpoints);
-
-		workerActor.onClose(() => {
-			this.threads.unregister(threadAdapter.id);
-			this.sendThreadExitedEvent(threadAdapter);
-		});
-	}
-
-	private attachThread(threadAdapter: ThreadAdapter, actorName: string): void {
-
-		threadAdapter.onNewSource((sourceActor) => {
-			this.attachSource(sourceActor, threadAdapter);
+			if (event.state === 'resumed') {
+				log.info(`Thread ${threadActor.name} resumed`);
+				// TODO we really want to do this synchronously,
+				// otherwise we may process the next pause before this has finished
+				await threadAdapter.disposePauseLifetimeAdapters();
+				this.sendEvent(new ContinuedEvent(threadAdapter.id));
+			}
 		});
 
-		threadAdapter.onPaused((reason) => {
-			log.info(`Thread ${actorName} paused , reason: ${reason.type}`);
-			this.sendStoppedEvent(threadAdapter, reason);
-		});
-
-		threadAdapter.onResumed(() => {
-			log.info(`Thread ${actorName} resumed unexpectedly`);
-			this.sendEvent(new ContinuedEvent(threadAdapter.id));
-		});
-
-		threadAdapter.onExited(() => {
-			log.info(`Thread ${actorName} exited`);
-			this.threads.unregister(threadAdapter.id);
-			this.sendThreadExitedEvent(threadAdapter);
-		});
+		return threadAdapter;
 	}
 
 	private attachSource(sourceActor: ISourceActorProxy, threadAdapter: ThreadAdapter): void {
 
-		const source = sourceActor.source;
-		let sourceAdapter = threadAdapter.findCorrespondingSourceAdapter(source.url || undefined);
-
-		if (sourceAdapter !== undefined) {
-			sourceAdapter.replaceActor(sourceActor);
-			this.sendNewSourceEvent(threadAdapter, sourceAdapter);
-			return;
-		}
-
-		const sourcePath = this.pathMapper.convertFirefoxSourceToPath(source);
-		sourceAdapter = threadAdapter.createSourceAdapter(sourceActor, sourcePath);
-
-		this.sendNewSourceEvent(threadAdapter, sourceAdapter);
+		const sourceAdapter = this.sources.addActor(sourceActor);
 
 		// check if this source should be skipped
+		const source = sourceActor.source;
 		let skipThisSource: boolean | undefined = undefined;
-		if (sourcePath !== undefined) {
-			skipThisSource = this.skipFilesManager.shouldSkip(sourcePath);
+		if (sourceAdapter.path !== undefined) {
+			skipThisSource = this.skipFilesManager.shouldSkip(sourceAdapter.path);
 		} else if (source.generatedUrl && (!source.url || !isAbsoluteUrl(source.url))) {
 			skipThisSource = this.skipFilesManager.shouldSkip(this.pathMapper.removeQueryString(source.generatedUrl));
 		} else if (source.url) {
@@ -530,125 +562,110 @@ export class FirefoxDebugSession {
 		}
 
 		if (skipThisSource !== undefined) {
-			if (source.isBlackBoxed !== skipThisSource) {
+			if (skipThisSource !== sourceAdapter.isBlackBoxed) {
+				sourceAdapter.setBlackBoxed(skipThisSource);
+			} else if (skipThisSource) {
 				sourceActor.setBlackbox(skipThisSource);
 			}
 		}
 
-		this.breakpointsManager.onNewSource(sourceAdapter);
+		threadAdapter.sourceActors.add(sourceActor);
+
+		this.sendNewSourceEvent(threadAdapter, sourceAdapter);
 	}
 
-	public attachConsole(consoleActor: ConsoleActorProxy, threadAdapter: ThreadAdapter): void {
+	private async sendConsoleMessage(message: FirefoxDebugProtocol.ConsoleMessage, threadAdapter: ThreadAdapter) {
+		consoleActorLog.debug(`Console API: ${JSON.stringify(message)}`);
 
-		consoleActor.onConsoleAPICall(async (consoleEvent) => {
-			consoleActorLog.debug(`Console API: ${JSON.stringify(consoleEvent)}`);
+		if (message.level === 'clear') {
+			this.sendEvent(new OutputEvent('\x1b[2J'));
+			return;
+		}
 
-			if (consoleEvent.level === 'clear') {
-				this.sendEvent(new OutputEvent('\x1b[2J'));
-				return;
+		if (message.level === 'time' && !message.timer?.error) {
+			// Match what is done in Firefox console and don't show anything when the timer starts
+			return;
+		}
+
+		let category = (message.level === 'error') ? 'stderr' :
+			(message.level === 'warn') ? 'console' : 'stdout';
+
+		let outputEvent: DebugProtocol.OutputEvent;
+
+		if (message.level === 'time' && message.timer?.error === "timerAlreadyExists") {
+			outputEvent = new OutputEvent(`Timer “${message.timer.name}” already exists`, 'console');
+		} else if (
+			(message.level === 'timeLog' || message.level === 'timeEnd') &&
+			message.timer?.error === "timerDoesntExist"
+		) {
+			outputEvent = new OutputEvent(`Timer “${message.timer.name}” doesn't exist`, 'console');
+		} else if (message.level === 'timeLog' && message.timer?.duration !== undefined) {
+			const args = message.arguments.map((grip, index) => {
+				// The first argument is the timer name
+				if (index === 0) {
+					return new VariableAdapter(
+						String(index),
+						undefined,
+						undefined,
+						`${message.timer.name}: ${message.timer.duration}ms`,
+						threadAdapter
+					);
+				}
+
+				if (typeof grip !== 'object') {
+					return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
+				}
+
+				return VariableAdapter.fromGrip(String(index), undefined, undefined, grip, true, threadAdapter);
+			});
+
+			let { variablesProviderId } = new ConsoleAPICallAdapter(args, threadAdapter);
+			outputEvent = new OutputEvent('', 'stdout');
+			outputEvent.body.variablesReference = variablesProviderId;
+		} else if (message.level === 'timeEnd' && message.timer?.duration !== undefined) {
+			outputEvent = new OutputEvent(`${message.timer.name}: ${message.timer.duration}ms - timer ended`, 'stdout');
+		} else if ((message.arguments.length === 1) && (typeof message.arguments[0] !== 'object')) {
+
+			let msg = String(message.arguments[0]);
+			if (this.config.showConsoleCallLocation) {
+				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
+				msg += ` (${filename}:${message.lineNumber}:${message.columnNumber})`;
 			}
 
-			if (consoleEvent.level === 'time' && !consoleEvent.timer?.error) {
-				// Match what is done in Firefox console and don't show anything when the timer starts
-				return;
-			}
+			outputEvent = new OutputEvent(msg + '\n', category);
 
-			let category = (consoleEvent.level === 'error') ? 'stderr' :
-				(consoleEvent.level === 'warn') ? 'console' : 'stdout';
+		} else {
 
-			let outputEvent: DebugProtocol.OutputEvent;
-
-			if (consoleEvent.level === 'time' && consoleEvent.timer?.error === "timerAlreadyExists") {
-				outputEvent = new OutputEvent(`Timer “${consoleEvent.timer.name}” already exists`, 'console');
-			} else if (
-				(consoleEvent.level === 'timeLog' || consoleEvent.level === 'timeEnd') &&
-				consoleEvent.timer?.error === "timerDoesntExist"
-			) {
-				outputEvent = new OutputEvent(`Timer “${consoleEvent.timer.name}” doesn't exist`, 'console');
-			} else if (consoleEvent.level === 'timeLog' && consoleEvent.timer?.duration !== undefined) {
-				const args = consoleEvent.arguments.map((grip, index) => {
-					// The first argument is the timer name
-					if (index === 0) {
-						return new VariableAdapter(
-							String(index),
-							undefined,
-							undefined,
-							`${consoleEvent.timer.name}: ${consoleEvent.timer.duration}ms`,
-							threadAdapter
-						);
-					}
-
-					if (typeof grip !== 'object') {
-						return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
-					}
-
+			let args = message.arguments.map((grip, index) => {
+				if (typeof grip !== 'object') {
+					return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
+				} else {
 					return VariableAdapter.fromGrip(String(index), undefined, undefined, grip, true, threadAdapter);
-				});
-
-				let { variablesProviderId } = new ConsoleAPICallAdapter(args, threadAdapter);
-				outputEvent = new OutputEvent('', 'stdout');
-				outputEvent.body.variablesReference = variablesProviderId;
-			} else if (consoleEvent.level === 'timeEnd' && consoleEvent.timer?.duration !== undefined) {
-				outputEvent = new OutputEvent(`${consoleEvent.timer.name}: ${consoleEvent.timer.duration}ms - timer ended`, 'stdout');
-			} else if ((consoleEvent.arguments.length === 1) && (typeof consoleEvent.arguments[0] !== 'object')) {
-
-				let msg = String(consoleEvent.arguments[0]);
-				if (this.config.showConsoleCallLocation) {
-					let filename = this.pathMapper.convertFirefoxUrlToPath(consoleEvent.filename);
-					msg += ` (${filename}:${consoleEvent.lineNumber}:${consoleEvent.columnNumber})`;
 				}
+			});
 
-				outputEvent = new OutputEvent(msg + '\n', category);
-
-			} else {
-
-				let args = consoleEvent.arguments.map((grip, index) => {
-					if (typeof grip !== 'object') {
-						return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
-					} else {
-						return VariableAdapter.fromGrip(String(index), undefined, undefined, grip, true, threadAdapter);
-					}
-				});
-
-				if ((consoleEvent.level === 'logPoint') && (args[args.length - 1].displayValue === '')) {
-					args.pop();
-				}
-
-				if (this.config.showConsoleCallLocation) {
-					let filename = this.pathMapper.convertFirefoxUrlToPath(consoleEvent.filename);
-					let locationVar = new VariableAdapter(
-						'location', undefined, undefined,
-						`(${filename}:${consoleEvent.lineNumber}:${consoleEvent.columnNumber})`,
-						threadAdapter);
-					args.push(locationVar);
-				}
-
-				let argsAdapter = new ConsoleAPICallAdapter(args, threadAdapter);
-
-				outputEvent = new OutputEvent('', category);
-				outputEvent.body.variablesReference = argsAdapter.variablesProviderId;
+			if ((message.level === 'logPoint') && (args[args.length - 1].displayValue === '')) {
+				args.pop();
 			}
 
-			await this.addLocation(outputEvent, consoleEvent.filename, consoleEvent.lineNumber, consoleEvent.columnNumber);
-
-			this.sendEvent(outputEvent);
-		});
-
-		consoleActor.onPageErrorCall(async (err) => {
-			consoleActorLog.debug(`Page Error: ${JSON.stringify(err)}`);
-
-			if (err.category === 'content javascript') {
-
-				let category = err.exception ? 'stderr' : 'stdout';
-				let outputEvent = new OutputEvent(err.errorMessage + '\n', category);
-				await this.addLocation(outputEvent, err.sourceName, err.lineNumber, err.columnNumber);
-
-				this.sendEvent(outputEvent);
+			if (this.config.showConsoleCallLocation) {
+				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
+				let locationVar = new VariableAdapter(
+					'location', undefined, undefined,
+					`(${filename}:${message.lineNumber}:${message.columnNumber})`,
+					threadAdapter);
+				args.push(locationVar);
 			}
-		});
 
-		consoleActor.startListeners();
-		consoleActor.getCachedMessages();
+			let argsAdapter = new ConsoleAPICallAdapter(args, threadAdapter);
+
+			outputEvent = new OutputEvent('', category);
+			outputEvent.body.variablesReference = argsAdapter.variablesProviderId;
+		}
+
+		await this.addLocation(outputEvent, message.filename, message.lineNumber, message.columnNumber);
+
+		this.sendEvent(outputEvent);
 	}
 
 	private async addLocation(
@@ -699,29 +716,6 @@ export class FirefoxDebugSession {
 		this.sendEvent(stoppedEvent);
 	}
 
-	public findSourceAdapter(url: string, tryWithoutQueryString = false): SourceAdapter | undefined {
-
-		for (let [, thread] of this.threads) {
-			let sources = thread.findSourceAdaptersForPathOrUrl(url);
-			if (sources.length > 0) {
-				return sources[0]!;
-			}
-		}
-
-		// workaround for VSCode issue #32845: the url may have contained a query string that got lost,
-		// in this case we look for a Source whose url is the same if the query string is removed
-		if (tryWithoutQueryString && (url.indexOf('?') < 0)) {
-			for (let [, thread] of this.threads) {
-				let sources = thread.findSourceAdaptersForUrlWithoutQuery(url);
-				if (sources.length > 0) {
-					return sources[0]!;
-				}
-			}
-		}
-
-		return undefined;
-	}
-
 	/** tell VS Code and the [Loaded Scripts Explorer](../extension/loadedScripts) about a new thread */
 	private sendThreadStartedEvent(threadAdapter: ThreadAdapter): void {
 		this.sendEvent(new ThreadEvent('started', threadAdapter.id));
@@ -742,14 +736,14 @@ export class FirefoxDebugSession {
 	/** tell the [Loaded Scripts Explorer](../extension/loadedScripts) about a new source */
 	private sendNewSourceEvent(threadAdapter: ThreadAdapter, sourceAdapter: SourceAdapter): void {
 
-		const sourceUrl = sourceAdapter.actor.url;
+		const sourceUrl = sourceAdapter.url;
 
 		if (sourceUrl && !sourceUrl.startsWith('javascript:')) {
 			this.sendEvent(new Event('newSource', <NewSourceEventBody>{
 				threadId: threadAdapter.id,
 				sourceId: sourceAdapter.id,
 				url: sourceUrl,
-				path: sourceAdapter.sourcePath
+				path: sourceAdapter.path
 			}));
 		}
 	}
