@@ -41,8 +41,7 @@ export class ObjectGripAdapter implements VariablesProvider {
 	 */
 	public async getVariables(): Promise<VariableAdapter[]> {
 
-		let prototypeAndProperties = await this.threadAdapter.coordinator.runOnPausedThread(
-			() => this.actor.fetchPrototypeAndProperties());
+		let prototypeAndProperties = await this.actor.fetchPrototypeAndProperties();
 
 		let variables: VariableAdapter[] = [];
 		let symbolVariables: VariableAdapter[] = [];

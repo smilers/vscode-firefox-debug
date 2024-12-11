@@ -13,14 +13,15 @@ export class BreakpointInfo {
 	public verified: boolean;
 
 	/** how many times the breakpoint should be skipped initially */
-	public readonly hitCount: number;
+	public readonly hitLimit: number;
+	public hitCount = 0;
 
 	public constructor(
 		public readonly id: number,
 		public readonly requestedBreakpoint: DebugProtocol.SourceBreakpoint
 	) {
 		this.verified = false;
-		this.hitCount = +(requestedBreakpoint.hitCondition || '');
+		this.hitLimit = +(requestedBreakpoint.hitCondition || '');
 	}
 
 	public isEquivalent(other: BreakpointInfo | DebugProtocol.SourceBreakpoint): boolean {
@@ -30,34 +31,5 @@ export class BreakpointInfo {
 
 		return (bp1.line === bp2.line) && (bp1.column === bp2.column) &&
 			(bp1.condition === bp2.condition) && (bp1.logMessage === bp2.logMessage);
-	}
-}
-
-export class BreakpointAdapter {
-
-	public hitCount: number;
-
-	public get actorName(): undefined {
-		return undefined;
-	}
-
-	public constructor(
-		public readonly breakpointInfo: BreakpointInfo,
-		private readonly sourceAdapter: SourceAdapter
-	) {
-		this.hitCount = 0;
-	}
-
-	delete(): Promise<void> {
-		if (this.breakpointInfo.actualLocation) {
-
-			return this.sourceAdapter.threadAdapter.actor.removeBreakpoint(
-				this.breakpointInfo.actualLocation,
-				this.sourceAdapter.actor
-			);
-
-		} else {
-			return Promise.resolve();
-		}
 	}
 }

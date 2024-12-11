@@ -6,6 +6,7 @@ import { PendingRequests } from '../../util/pendingRequests';
 export abstract class BaseActorProxy extends EventEmitter implements ActorProxy {
 
 	private readonly pendingRequests = new PendingRequests<any>();
+	private readonly cachedRequestPromises = new Map<string, Promise<any>>();
 
 	constructor(
 		public readonly name: string,
@@ -21,6 +22,13 @@ export abstract class BaseActorProxy extends EventEmitter implements ActorProxy 
 			this.pendingRequests.enqueue({ resolve, reject });
 			this.connection.sendRequest({ ...request, to: this.name });
 		});
+	}
+
+	sendCachedRequest<T extends Omit<FirefoxDebugProtocol.Request, 'to'>, R, S>(key: string, request: T, convert: (r: R) => S): Promise<S> {
+		if (!this.cachedRequestPromises.has(key)) {
+			this.cachedRequestPromises.set(key, (async () => convert(await this.sendRequest(request)))());
+		}
+		return this.cachedRequestPromises.get(key)!;
 	}
 
 	async getRequestTypes(): Promise<string[]> {

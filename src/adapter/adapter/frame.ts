@@ -27,7 +27,7 @@ export class FrameAdapter {
 	public async getStackframe(): Promise<StackFrame> {
 
 		let sourceActorName = this.frame.where.actor;
-		let sourceAdapter = await this.threadAdapter.findSourceAdapterForActorName(sourceActorName);
+		let sourceAdapter = await this.threadAdapter.debugSession.sources.getAdapterForActor(sourceActorName);
 
 		let name: string;
 		switch (this.frame.type) {
@@ -68,10 +68,14 @@ export class FrameAdapter {
 			const environment = await frameActor.getEnvironment();
 			frameActor.dispose();
 
-			const environmentAdapter = EnvironmentAdapter.from(environment);
-			this._scopeAdapters = environmentAdapter.getScopeAdapters(this);
-			if (this.frame.this !== undefined) {
-				this._scopeAdapters[0].addThis(this.frame.this);
+			if (environment.type) {
+				const environmentAdapter = EnvironmentAdapter.from(environment);
+				this._scopeAdapters = environmentAdapter.getScopeAdapters(this);
+				if (this.frame.this !== undefined) {
+					this._scopeAdapters[0].addThis(this.frame.this);
+				}
+			} else {
+				this._scopeAdapters = [];
 			}
 		}
 

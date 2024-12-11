@@ -3,8 +3,6 @@ import { EventEmitter } from 'events';
 import { DebugConnection } from '../connection';
 import { PendingRequest, PendingRequests } from '../../util/pendingRequests';
 import { ActorProxy } from './interface';
-import { ISourceActorProxy, SourceActorProxy } from './source';
-import { MappedLocation, UrlLocation } from '../../location';
 
 let log = Log.create('ThreadActorProxy');
 
@@ -16,20 +14,12 @@ export interface AttachOptions {
 
 export interface IThreadActorProxy {
 	name: string;
-	attach(options: AttachOptions): Promise<void>;
-	resume(exceptionBreakpoints: ExceptionBreakpoints | undefined, resumeLimitType?: 'next' | 'step' | 'finish'): Promise<void>;
+	resume(resumeLimitType?: 'next' | 'step' | 'finish'): Promise<void>;
 	interrupt(immediately?: boolean): Promise<void>;
-	fetchSources(): Promise<FirefoxDebugProtocol.Source[]>;
 	fetchStackFrames(start?: number, count?: number): Promise<FirefoxDebugProtocol.Frame[]>;
-	setBreakpoint(location: MappedLocation, sourceActor: ISourceActorProxy, condition?: string, logValue?: string): Promise<void>;
 	pauseOnExceptions(pauseOnExceptions: boolean, ignoreCaughtExceptions: boolean): Promise<void>;
-	removeBreakpoint(location: MappedLocation, sourceActor: ISourceActorProxy): Promise<void>;
-	findOriginalLocation(generatedUrl: string, line: number, column?: number): Promise<UrlLocation | undefined>
-	onPaused(cb: (event: FirefoxDebugProtocol.ThreadPausedResponse) => void): void;
-	onResumed(cb: () => void): void;
 	onExited(cb: () => void): void;
 	onWrongState(cb: () => void): void;
-	onNewSource(cb: (newSource: ISourceActorProxy) => void): void;
 	onNewGlobal(cb: () => void): void;
 	dispose(): void;
 }
@@ -55,68 +45,27 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 		log.debug(`Created thread ${this.name}`);
 	}
 
-	private attachPromise?: Promise<void>;
 	private pendingResumeRequest?: PendingRequest<void>;
 	private resumePromise?: Promise<void>;
 	private pendingInterruptRequest?: PendingRequest<void>;
 	private interruptPromise?: Promise<void>;
 
-	private pendingSourcesRequests = new PendingRequests<FirefoxDebugProtocol.Source[]>();
 	private pendingStackFramesRequests = new PendingRequests<FirefoxDebugProtocol.Frame[]>();
 	private pendingEmptyResponseRequests = new PendingRequests<void>();
 
 	/**
-	 * Attach the thread if it is detached
-	 */
-	public attach(options: AttachOptions): Promise<void> {
-		if (!this.attachPromise) {
-			log.debug(`Attaching thread ${this.name}`);
-
-			this.attachPromise = new Promise<void>((resolve, reject) => {
-				this.pendingEmptyResponseRequests.enqueue({ resolve, reject });
-				this.connection.sendRequest({
-					to: this.name, type: 'attach', options
-				});
-			});
-
-		} else {
-			log.warn('Attaching this thread has already been requested!');
-		}
-
-		return this.attachPromise;
-	}
-
-	/**
 	 * Resume the thread if it is paused
 	 */
-	public resume(
-		exceptionBreakpoints: ExceptionBreakpoints | undefined,
-		resumeLimitType?: 'next' | 'step' | 'finish'
-	): Promise<void> {
+	public resume(resumeLimitType?: 'next' | 'step' | 'finish'): Promise<void> {
 
 		if (!this.resumePromise) {
 			log.debug(`Resuming thread ${this.name}`);
 
 			let resumeLimit = resumeLimitType ? { type: resumeLimitType } : undefined;
-			let pauseOnExceptions: boolean | undefined = undefined;
-			let ignoreCaughtExceptions: boolean | undefined = undefined;
-			switch (exceptionBreakpoints) {
-				case ExceptionBreakpoints.All:
-					pauseOnExceptions = true;
-					break;
-
-				case ExceptionBreakpoints.Uncaught:
-					pauseOnExceptions = true;
-					ignoreCaughtExceptions = true;
-					break;
-			}
 
 			this.resumePromise = new Promise<void>((resolve, reject) => {
 				this.pendingResumeRequest = { resolve, reject };
-				this.connection.sendRequest({
-					to: this.name, type: 'resume',
-					resumeLimit, pauseOnExceptions, ignoreCaughtExceptions
-				});
+				this.connection.sendRequest({ to: this.name, type: 'resume', resumeLimit });
 			});
 			this.interruptPromise = undefined;
 
@@ -147,31 +96,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 		return this.interruptPromise;
 	}
 
-	public setBreakpoint(location: MappedLocation, sourceActor: ISourceActorProxy, condition?: string, logValue?: string): Promise<void> {
-		log.debug(`Setting breakpoint at ${location.line}:${location.column} in ${sourceActor.url}`);
-
-		return new Promise<void>((resolve, reject) => {
-			this.pendingEmptyResponseRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({
-				to: this.name, type: 'setBreakpoint',
-				location: { line: location.line, column: location.column, sourceUrl: sourceActor.url },
-				options: { condition, logValue }
-			});
-		})
-	}
-
-	public removeBreakpoint(location: MappedLocation, sourceActor: ISourceActorProxy): Promise<void> {
-		log.debug(`Removing breakpoint at ${location.line}:${location.column} in ${sourceActor.url}`);
-
-		return new Promise<void>((resolve, reject) => {
-			this.pendingEmptyResponseRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({
-				to: this.name, type: 'removeBreakpoint',
-				location: { line: location.line, column: location.column, sourceUrl: sourceActor.url }
-			});
-		})
-	}
-
 	public pauseOnExceptions(pauseOnExceptions: boolean, ignoreCaughtExceptions: boolean): Promise<void> {
 		log.debug(`Setting pauseOnException=${pauseOnExceptions}, ignoreCaughtExceptions=${ignoreCaughtExceptions}`);
 
@@ -182,19 +106,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 				pauseOnExceptions, ignoreCaughtExceptions
 			});
 		})
-	}
-
-	/**
-	 * Fetch the list of source files. This will also cause newSource events to be emitted for
-	 * every source file (including those that are loaded later and strings passed to eval())
-	 */
-	public fetchSources(): Promise<FirefoxDebugProtocol.Source[]> {
-		log.debug(`Fetching sources from thread ${this.name}`);
-
-		return new Promise<FirefoxDebugProtocol.Source[]>((resolve, reject) => {
-			this.pendingSourcesRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ to: this.name, type: 'sources' });
-		});
 	}
 
 	/**
@@ -210,14 +121,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 				start, count
 			});
 		});
-	}
-
-	public async findOriginalLocation(
-		url: string,
-		line: number,
-		column: number
-	): Promise<UrlLocation | undefined> {
-		return { url, line, column };
 	}
 
 	public dispose(): void {
@@ -288,39 +191,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 				this.resumePromise = Promise.resolve(undefined);
 				this.emit('resumed');
 			}
-		} else if (response['sources']) {
-
-			let sources = <FirefoxDebugProtocol.Source[]>(response['sources']);
-			log.debug(`Received ${sources.length} sources from thread ${this.name}`);
-			this.pendingSourcesRequests.resolveOne(sources);
-
-			for (let source of sources) {
-
-				if (this.enableCRAWorkaround && source.url?.endsWith('hot-update.js')) {
-
-					log.debug('Ignoring this source because the CRA workaround is enabled');
-	
-				} else if (!this.connection.has(source.actor)) {
-
-					const sourceActor = new SourceActorProxy(source, this.connection);
-					this.emit('newSource', sourceActor);
-				}
-			}
-
-		} else if (response['type'] === 'newSource') {
-
-			let source = <FirefoxDebugProtocol.Source>(response['source']);
-			log.debug(`New source ${source.url} on thread ${this.name}`);
-
-			if (this.enableCRAWorkaround && source.url?.endsWith('hot-update.js')) {
-
-				log.debug('Ignoring this source because the CRA workaround is enabled');
-
-			} else if (!this.connection.has(source.actor)) {
-
-				const sourceActor = new SourceActorProxy(source, this.connection);
-				this.emit('newSource', sourceActor);
-			}
 
 		} else if (response['frames']) {
 
@@ -361,7 +231,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 			if (this.pendingResumeRequest) {
 				this.pendingResumeRequest.reject('No such actor');
 			}
-			this.pendingSourcesRequests.rejectAll('No such actor');
 			this.pendingStackFramesRequests.rejectAll('No such actor');
 
 		} else if (response['error'] === 'unknownFrame') {
@@ -390,35 +259,13 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 		}
 
 	}
-
-	/**
-	 * The paused event is only sent when the thread is paused because it hit a breakpoint or a
-	 * resumeLimit, but not if it was paused due to an interrupt request or because an evaluate
-	 * request is finished
-	 */
-	public onPaused(cb: (event: FirefoxDebugProtocol.ThreadPausedResponse) => void) {
-		this.on('paused', cb);
-	}
-
-	/**
-	 * The resumed event is only sent when the thread is resumed without a corresponding request
-	 * (this happens when a tab in Firefox is reloaded or navigated to a different url while
-	 * the corresponding thread is paused)
-	 */
-	public onResumed(cb: () => void) {
-		this.on('resumed', cb);
-	}
-
+	
 	public onExited(cb: () => void) {
 		this.on('exited', cb);
 	}
 
 	public onWrongState(cb: () => void) {
 		this.on('wrongState', cb);
-	}
-
-	public onNewSource(cb: (newSource: ISourceActorProxy) => void) {
-		this.on('newSource', cb);
 	}
 
 	public onNewGlobal(cb: () => void) {

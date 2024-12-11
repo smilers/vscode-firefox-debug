@@ -78,19 +78,15 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 	protected async breakpointLocations(
 		args: DebugProtocol.BreakpointLocationsArguments
 	): Promise<{ breakpoints: DebugProtocol.BreakpointLocation[]; }> {
+		if (!args.source.path) return { breakpoints: [] };
 
-		for (const [ _, source ] of this.session.sources) {
-			if (source.sourcePath === args.source.path) {
-				const positions = await source.actor.getBreakableLocations(args.line);
-				const breakpoints: DebugProtocol.BreakpointLocation[] = [];
-				for (const position of positions) {
-					breakpoints.push({ line: position.line, column: position.column + 1 });
-				}
-				return { breakpoints };
-			}
+		const sourceAdapter = await this.session.sources.getAdapterForPath(args.source.path);
+		const positions = await sourceAdapter.getBreakableLocations(args.line);
+		const breakpoints: DebugProtocol.BreakpointLocation[] = [];
+		for (const position of positions) {
+			breakpoints.push({ line: position.line, column: position.column + 1 });
 		}
-
-		return { breakpoints: [] };
+		return { breakpoints };
 	}
 
 	protected setBreakpoints(args: DebugProtocol.SetBreakpointsArguments): { breakpoints: DebugProtocol.Breakpoint[] } {
@@ -186,20 +182,23 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 		let sourceAdapter: SourceAdapter | undefined;
 		if (args.sourceReference !== undefined) {
 
-			let sourceReference = args.sourceReference;
-			sourceAdapter = this.session.sources.find(sourceReference);
+			sourceAdapter = this.session.sources.getAdapterForID(args.sourceReference);
 
-		} else if (args.source && args.source.path) {
+		} else if (args.source?.path) {
 
-			sourceAdapter = this.session.findSourceAdapter(args.source.path, true);
-
+			sourceAdapter = this.session.sources.findSourceAdaptersForPathOrUrl(args.source.path)[0];
+			if (!sourceAdapter && args.source.path.indexOf('?') < 0) {
+				// workaround for VSCode issue #32845: the url may have contained a query string that got lost,
+				// in this case we look for a Source whose url is the same if the query string is removed
+				sourceAdapter = this.session.sources.findSourceAdaptersForUrlWithoutQuery(args.source.path)[0];
+			}
 		}
 
 		if (!sourceAdapter) {
 			throw new Error('Failed sourceRequest: the requested source can\'t be found');
 		}
 
-		let sourceGrip = await sourceAdapter.actor.fetchSource();
+		let sourceGrip = await sourceAdapter.actors[0].fetchSource();
 
 		if (typeof sourceGrip === 'string') {
 
@@ -220,7 +219,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 		log.debug(`${this.session.threads.count} threads`);
 
 		let threads = this.session.threads.map(
-			(threadAdapter) => new Thread(threadAdapter.id, `${threadAdapter.name}: ${threadAdapter.getUrl()}`));
+			(threadAdapter) => new Thread(threadAdapter.id, `${threadAdapter.name}: ${threadAdapter.url}`));
 
 		return { threads };
 	}
@@ -414,15 +413,16 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 
 			const provider = this.session.variablesProviders.find(args.variablesReference);
 			if (provider instanceof ObjectGripAdapter) {
-
-				provider.threadAdapter.threadLifetime(provider);
-				await provider.actor.threadLifetime();
-
-				return {
-					dataId: DataBreakpointsManager.encodeDataId(args.variablesReference, args.name),
-					description: args.name,
-					accessTypes: [ 'read', 'write' ]
-				};
+				try {
+					await provider.actor.threadLifetime();
+					provider.threadAdapter.threadLifetime(provider);
+	
+					return {
+						dataId: DataBreakpointsManager.encodeDataId(args.variablesReference, args.name),
+						description: args.name,
+						accessTypes: [ 'read', 'write' ]
+					};
+				} catch {}
 			}
 		}
 

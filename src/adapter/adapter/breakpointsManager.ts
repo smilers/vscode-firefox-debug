@@ -1,11 +1,10 @@
 import { Log } from '../util/log';
 import { isWindowsPlatform as detectWindowsPlatform } from '../../common/util';
-import { SourceAdapter } from './source';
-import { ThreadAdapter } from './thread';
-import { Registry } from './registry';
 import { BreakpointInfo } from './breakpoint';
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { Breakpoint, BreakpointEvent, Event } from 'vscode-debugadapter';
+import { Event, Breakpoint, BreakpointEvent } from 'vscode-debugadapter';
+import { FirefoxDebugSession } from '../firefoxDebugSession';
+import { SourceMappingSourceActorProxy } from '../firefox/sourceMaps/source';
 
 let log = Log.create('BreakpointsManager');
 
@@ -22,10 +21,43 @@ export class BreakpointsManager {
 	private readonly breakpointsBySourcePathOrUrl = new Map<string, BreakpointInfo[]>();
 
 	constructor(
-		private readonly threads: Registry<ThreadAdapter>,
-		private readonly suggestPathMappingWizard: boolean,
-		private readonly sendEvent: (ev: DebugProtocol.Event) => void
-	) {}
+		private readonly session: FirefoxDebugSession
+	) {
+		session.breakpointLists.onRegistered(breakpointListActor => {
+			[...this.breakpointsBySourcePathOrUrl.entries()].forEach(async ([sourcePath, breakpoints]) => {
+				const sourceAdapter = await session.sources.getAdapterForPath(sourcePath);
+				if (sourceAdapter.url) {
+					breakpoints.forEach(async breakpointInfo => {
+						const actualLocation = await sourceAdapter.findNextBreakableLocation(
+							breakpointInfo.requestedBreakpoint.line,
+							(breakpointInfo.requestedBreakpoint.column || 1) - 1
+						);
+						if (actualLocation) {
+							breakpointInfo.actualLocation = actualLocation;
+
+							let logValue: string | undefined;
+							if (breakpointInfo.requestedBreakpoint.logMessage) {
+								logValue = '...' + convertLogpointMessage(breakpointInfo.requestedBreakpoint.logMessage);
+							}
+				
+							const location = actualLocation.generated ?? actualLocation;
+							const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
+							breakpointListActor.setBreakpoint(
+								url,
+								location.line,
+								location.column,
+								breakpointInfo.requestedBreakpoint.condition,
+								logValue
+							);
+							if (!breakpointInfo.verified) {
+								this.verifyBreakpoint(breakpointInfo);
+							}	
+						}
+					});
+				}
+			});
+		});
+	}
 
 	/**
 	 * called by [`FirefoxDebugAdapter#setBreakpoints()`](../firefoxDebugAdapter.ts) whenever the
@@ -38,62 +70,101 @@ export class BreakpointsManager {
 
 		log.debug(`Setting ${breakpoints.length} breakpoints for ${sourcePathOrUrl}`);
 
-		const key = this.createBreakpointInfoKey(sourcePathOrUrl);
-		const oldBreakpointInfos = this.breakpointsBySourcePathOrUrl.get(key);
+		const normalizedPathOrUrl = this.normalizePathOrUrl(sourcePathOrUrl);
+		const oldBreakpointInfos = this.breakpointsBySourcePathOrUrl.get(normalizedPathOrUrl);
 		const breakpointInfos = breakpoints.map(
 			breakpoint => this.getOrCreateBreakpointInfo(breakpoint, oldBreakpointInfos)
 		);
 
-		this.breakpointsBySourcePathOrUrl.set(key, breakpointInfos);
+		this.breakpointsBySourcePathOrUrl.set(normalizedPathOrUrl, breakpointInfos);
 
-		let sourceAdapterFound = false;
-		for (const [, threadAdapter] of this.threads) {
-			const sourceAdapters = threadAdapter.findSourceAdaptersForPathOrUrl(sourcePathOrUrl);
-			for (const sourceAdapter of sourceAdapters) {
-				sourceAdapterFound = true;
-				sourceAdapter.updateBreakpoints(breakpointInfos);
+		breakpointInfos.forEach(async breakpointInfo => {
+			if (!oldBreakpointInfos?.some(oldBreakpointInfo => oldBreakpointInfo === breakpointInfo)) {
+				let sourceAdapter = this.session.sources.getExistingAdapterForPath(normalizedPathOrUrl);
+				if (!sourceAdapter) {
+					this.session.sendEvent(new Event('unknownSource', sourcePathOrUrl));
+					sourceAdapter = await this.session.sources.getAdapterForPath(normalizedPathOrUrl);
+				}
+				if (sourceAdapter.url) {
+					const actualLocation = await sourceAdapter.findNextBreakableLocation(
+						breakpointInfo.requestedBreakpoint.line,
+						(breakpointInfo.requestedBreakpoint.column || 1) - 1
+					);
+					if (actualLocation) {
+						breakpointInfo.actualLocation = actualLocation;
+
+						let logValue: string | undefined;
+						if (breakpointInfo.requestedBreakpoint.logMessage) {
+							logValue = '...' + convertLogpointMessage(breakpointInfo.requestedBreakpoint.logMessage);
+						}
+			
+						const location = actualLocation.generated ?? actualLocation;
+						const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
+						for (const [, breakpointListActor] of this.session.breakpointLists) {
+							breakpointListActor.setBreakpoint(
+								url,
+								location.line,
+								location.column,
+								breakpointInfo.requestedBreakpoint.condition,
+								logValue
+							);
+						}
+						if (!breakpointInfo.verified) {
+							this.verifyBreakpoint(breakpointInfo);
+						}
+					}
+				}
 			}
-		}
+		});
 
-		if (!sourceAdapterFound && this.suggestPathMappingWizard) {
-			this.sendEvent(new Event('unknownSource', sourcePathOrUrl));
+		if (oldBreakpointInfos) {
+			oldBreakpointInfos.forEach(async oldBreakpointInfo => {
+				if (!breakpointInfos.some(breakpointInfo => 
+					breakpointInfo.requestedBreakpoint.line === oldBreakpointInfo.requestedBreakpoint.line &&
+					breakpointInfo.requestedBreakpoint.column === oldBreakpointInfo.requestedBreakpoint.column
+				)) {
+					const sourceAdapter = await this.session.sources.getAdapterForPath(normalizedPathOrUrl);
+					if (sourceAdapter.url) {
+						const actualLocation = await sourceAdapter.findNextBreakableLocation(
+							oldBreakpointInfo.requestedBreakpoint.line,
+							(oldBreakpointInfo.requestedBreakpoint.column || 1) - 1
+						);
+						if (actualLocation) {
+							const location = actualLocation.generated ?? actualLocation;
+							const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
+							for (const [, breakpointListActor] of this.session.breakpointLists) {
+								breakpointListActor.removeBreakpoint(
+									url,
+									location.line,
+									location.column
+								);
+							}
+						}
+					}
+					}
+			});
 		}
 
 		return breakpointInfos;
 	}
 
-	/** 
-	 * called by [`SourceAdapter#syncBreakpoints()`](./source.ts) whenever a breakpoint has been set
-	 * in Firefox
-	 */
-	public verifyBreakpoint(breakpointInfo: BreakpointInfo): void {
+	public getBreakpoints(sourcePathOrUrl: string) {
+		return this.breakpointsBySourcePathOrUrl.get(sourcePathOrUrl);
+	}
+
+	private verifyBreakpoint(breakpointInfo: BreakpointInfo): void {
 
 		if (!breakpointInfo.actualLocation) return;
 
 		let breakpoint: DebugProtocol.Breakpoint = new Breakpoint(
 			true, breakpointInfo.actualLocation.line, breakpointInfo.actualLocation.column + 1);
 		breakpoint.id = breakpointInfo.id;
-		this.sendEvent(new BreakpointEvent('changed', breakpoint));
+		this.session.sendEvent(new BreakpointEvent('changed', breakpoint));
 
 		breakpointInfo.verified = true;
 	}
 
-	/**
-	 * called by [`FirefoxDebugSession#attachSource()`](../firefoxDebugSession.ts) whenever a new
-	 * javascript source was attached
-	 */
-	public onNewSource(sourceAdapter: SourceAdapter) {
-		const sourcePath = sourceAdapter.sourcePath;
-		if (sourcePath !== undefined) {
-			const key = this.createBreakpointInfoKey(sourcePath);
-			const breakpointInfos = this.breakpointsBySourcePathOrUrl.get(key);
-			if (breakpointInfos !== undefined) {
-				sourceAdapter.updateBreakpoints(breakpointInfos);
-			}
-		}
-	}
-
-	private createBreakpointInfoKey(sourcePathOrUrl: string): string {
+	private normalizePathOrUrl(sourcePathOrUrl: string): string {
 		if (isWindowsPlatform && windowsAbsolutePathRegEx.test(sourcePathOrUrl)) {
 			return sourcePathOrUrl.toLowerCase();
 		} else {
@@ -119,4 +190,38 @@ export class BreakpointsManager {
 
 		return new BreakpointInfo(this.nextBreakpointId++, requestedBreakpoint);
 	}
+}
+
+/**
+ * convert the message of a logpoint (which can contain javascript expressions in curly braces)
+ * to a javascript expression that evaluates to an array of values to be displayed in the debug console
+ * (doesn't support escaping or nested curly braces)
+ */
+export function convertLogpointMessage(msg: string): string {
+
+	// split `msg` into string literals and javascript expressions
+	const items: string[] = [];
+	let currentPos = 0;
+	while (true) {
+
+		const leftBrace = msg.indexOf('{', currentPos);
+
+		if (leftBrace < 0) {
+
+			items.push(JSON.stringify(msg.substring(currentPos)));
+			break;
+
+		} else {
+
+			let rightBrace = msg.indexOf('}', leftBrace + 1);
+			if (rightBrace < 0) rightBrace = msg.length;
+
+			items.push(JSON.stringify(msg.substring(currentPos, leftBrace)));
+			items.push(msg.substring(leftBrace + 1, rightBrace));
+			currentPos = rightBrace + 1;
+		}
+	}
+
+	// the appended `reduce()` call will convert all non-object values to strings and concatenate consecutive strings
+	return `[${items.join(',')}].reduce((a,c)=>{if(typeof c==='object'&&c){a.push(c,'')}else{a.push(a.pop()+c)}return a},[''])`;
 }

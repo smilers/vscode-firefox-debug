@@ -43,8 +43,8 @@ export class GetterValueAdapter implements VariablesProvider {
 	public async getVariables(): Promise<VariableAdapter[]> {
 		if (this.referenceExpression && this.referenceFrame) {
 
-			const grip = await this.threadAdapter.coordinator.evaluate(
-				this.referenceExpression, this.referenceFrame.frame.actor
+			const grip = await this.threadAdapter.evaluateRaw(
+				this.referenceExpression, true, this.referenceFrame.frame.actor
 			);
 
 			const variableAdapter = VariableAdapter.fromGrip(

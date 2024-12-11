@@ -73,7 +73,7 @@ declare namespace FirefoxDebugProtocol {
 		id: string;
 		name: string;
 		isWebExtension?: boolean;
-		url?: string;
+		url: string;
 		consoleActor?: string;
 		iconURL?: string;
 		debuggable?: boolean;
@@ -91,12 +91,12 @@ declare namespace FirefoxDebugProtocol {
 		};
 	}
 
-	interface ProcessResponse extends Response {
+	interface GetTargetResponse extends Response {
 		form: {
 			actor: string;
 			url: string;
 			consoleActor: string;
-			threadActor?: string;
+			threadActor: string;
 		}
 	}
 
@@ -219,6 +219,17 @@ declare namespace FirefoxDebugProtocol {
 		timer: any; //?
 	}
 
+	interface ConsoleMessage {
+		arguments: Grip[];
+		filename: string;
+		level: string;
+		lineNumber: number;
+		columnNumber: number;
+		timeStamp: number;
+		timer: any; //?
+		// sourceId, innerWindowID
+	}
+
 	interface LogMessageResponse extends TypedResponse {
 		message: string;
 		timeStamp: number;
@@ -271,6 +282,10 @@ declare namespace FirefoxDebugProtocol {
 		[line: string]: number[];
 	}
 
+	interface SourceResponse extends Response {
+		source: Grip;
+	}
+
 	interface SetBreakpointResponse extends Response {
 		actor: string;
 		isPending: boolean;
@@ -282,6 +297,61 @@ declare namespace FirefoxDebugProtocol {
 		ownProperties: PropertyDescriptors;
 		safeGetterValues?: SafeGetterValueDescriptors;
 		ownSymbols?: NamedPropertyDescriptor[];
+	}
+
+	interface GetWatcherResponse extends Response {
+		actor: string;
+		traits: {};
+	}
+
+	interface GetBreakpointListResponse extends Response {
+		breakpointList: {
+			actor: string;
+		};
+	}
+
+	interface GetThreadConfigurationResponse extends Response {
+		configuration: {
+			actor: string;
+		};
+	}
+
+	interface ThreadConfiguration {
+		shouldPauseOnDebuggerStatement: boolean;
+		pauseOnExceptions: boolean;
+		ignoreCaughtExceptions: boolean;
+		shouldIncludeSavedFrames: boolean;
+		shouldIncludeAsyncLiveFrames: boolean;
+		skipBreakpoints: boolean;
+		logEventBreakpoints: boolean;
+		observeAsmJS: boolean;
+		pauseOverlay: boolean;
+	}
+
+	interface TargetAvailableEvent extends Event {
+		target: {
+			url: string;
+			actor: string;
+			consoleActor: string;
+			threadActor: string;
+		};
+	}
+
+	interface TargetDestroyedEvent extends Event {
+		type: 'target-destroyed-form';
+		target: {
+			actor: string;
+		};
+	}
+
+	interface DescriptorDestroyedEvent extends Event {
+		type: 'descriptor-destroyed';
+	}
+	
+	interface ThreadState {
+		state: 'paused' | 'resumed';
+		frame?: Frame;
+		why?: ThreadPausedReason;
 	}
 
 	interface CompletionValue {
@@ -334,9 +404,69 @@ declare namespace FirefoxDebugProtocol {
 		addonPath?: string;
 	}
 
+	interface SourceResource extends Source {
+		resourceType: 'source';
+	}
+
+	interface ConsoleMessageResource {
+		resourceType: 'console-message';
+		message: ConsoleMessage;
+	}
+
+	interface ErrorMessageResource {
+		resourceType: 'error-message';
+		pageError: PageError;
+	}
+
+	interface ThreadStateResource extends ThreadState {
+		resourceType: 'thread-state';
+	}
+
+	interface ResourceAvailableForm extends Event {
+		type: 'resource-available-form';
+		resources: (SourceResource | ConsoleMessageResource | ErrorMessageResource | ThreadStateResource)[];
+	}
+
+	type Sources = ['source', Source[]];
+	type ConsoleMessages = ['console-message', ConsoleMessage[]];
+	type ErrorMessages = ['error-message', PageError[]];
+	type ThreadStates = ['thread-state', ThreadState[]];
+	type Resources = (Sources | ConsoleMessages | ErrorMessages | ThreadStates)[];
+
+	interface ResourcesAvailableEvent extends Event {
+		type: 'resources-available-array';
+		array: Resources;
+	}
+
+	interface FrameUpdateEvent extends Event {
+		type: 'frameUpdate';
+	}
+
+	interface PageError {
+		errorMessage: string;
+		sourceName: string;
+		lineText: string;
+		lineNumber: number;
+		columnNumber: number;
+		category: string;
+		timeStamp: number;
+		info: boolean;
+		warning: boolean;
+		error: boolean;
+		exception: boolean;
+		strict: boolean;
+		private: boolean;
+		stacktrace: {
+			filename: string;
+			functionname: string;
+			line: number;
+			column: number;
+		}[] | null;
+	}
+	
 	interface Environment {
-		type: 'object' | 'function' | 'with' | 'block';
-		actor: string;
+		type?: 'object' | 'function' | 'with' | 'block';
+		actor?: string;
 		parent?: Environment;
 	}
 

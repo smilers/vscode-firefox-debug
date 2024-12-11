@@ -2,6 +2,7 @@ import { DebugClient } from 'vscode-debugadapter-testsupport';
 import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';
+import { delay } from '../common/util';
 
 describe('Inspecting variables: The debugger', function() {
 
@@ -82,6 +83,8 @@ describe('Inspecting variables: The debugger', function() {
 		util.evaluate(dc, 'doEval(17)');
 		let stoppedEvent = await util.receiveStoppedEvent(dc);
 		let threadId = stoppedEvent.body.threadId!;
+
+		await delay(100); // TODO
 
 		await dc.stepOutRequest({ threadId });
 		await util.receiveStoppedEvent(dc);

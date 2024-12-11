@@ -1,8 +1,9 @@
 import isAbsoluteUrl from 'is-absolute-url';
 import { Log } from '../util/log';
 import { isWindowsPlatform as detectWindowsPlatform } from '../../common/util';
-import { ThreadAdapter } from './thread';
+import { SourcesManager } from './sourcesManager';
 import { Registry } from './registry';
+import { ThreadAdapter } from './thread';
 
 let log = Log.create('SkipFilesManager');
 
@@ -23,6 +24,7 @@ export class SkipFilesManager {
 
 	public constructor(
 		private readonly configuredFilesToSkip: RegExp[],
+		private readonly sources: SourcesManager,
 		private readonly threads: Registry<ThreadAdapter>
 	) {}
 
@@ -71,16 +73,13 @@ export class SkipFilesManager {
 
 		let promises: Promise<void>[] = [];
 
+		const sourceAdapters = this.sources.findSourceAdaptersForPathOrUrl(pathOrUrl);
+
+		for (const sourceAdapter of sourceAdapters) {
+			promises.push(sourceAdapter.setBlackBoxed(skipFile));
+		}
+
 		for (const [, thread] of this.threads) {
-
-			let sourceAdapters = thread.findSourceAdaptersForPathOrUrl(pathOrUrl);
-
-			for (const sourceAdapter of sourceAdapters) {
-				if (sourceAdapter.actor.source.isBlackBoxed !== skipFile) {
-					promises.push(sourceAdapter.actor.setBlackbox(skipFile));
-				}
-			}
-
 			thread.triggerStackframeRefresh();
 		}
 

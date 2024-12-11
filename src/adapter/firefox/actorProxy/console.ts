@@ -66,7 +66,7 @@ export class ConsoleActorProxy extends EventEmitter implements ActorProxy {
 	 * 2 answers: the first answer gives us a resultID for the evaluation result. The second answer
 	 * gives us the actual evaluation result.
 	 */
-	public evaluate(expr: string, frameActorName?: string): Promise<FirefoxDebugProtocol.Grip> {
+	public evaluate(expr: string, disableBreaks: boolean, frameActorName?: string): Promise<FirefoxDebugProtocol.Grip> {
 		log.debug(`Evaluating '${expr}' on console ${this.name}`);
 
 		return new Promise<FirefoxDebugProtocol.Grip>((resolveEvaluate, rejectEvaluate) => {
@@ -86,7 +86,7 @@ export class ConsoleActorProxy extends EventEmitter implements ActorProxy {
 
 			this.connection.sendRequest({
 				to: this.name, type: 'evaluateJSAsync',
-				text: expr, frameActor: frameActorName
+				text: expr, frameActor: frameActorName, disableBreaks
 			});
 		})
 	}
