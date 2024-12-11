@@ -1,3 +1,7 @@
+### Version 2.10.0
+* migrate to new debug protocol methods
+* fix breakpoints not working after navigating
+
 ### Version 2.9.11
 * handle console.time/timeEnd
 * fix the loaded scripts panel
