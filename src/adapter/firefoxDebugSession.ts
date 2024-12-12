@@ -61,6 +61,7 @@ export class FirefoxDebugSession {
 	private firefoxClosedPromise?: Promise<void>;
 	public firefoxDebugConnection!: DebugConnection;
 	private firefoxDebugSocketClosed = false;
+	private firefoxDebugSocketClosedPromise?: Promise<void>;
 
 	public preferenceActor!: PreferenceActorProxy;
 	public addonsActor?: AddonsActorProxy;
@@ -120,6 +121,14 @@ export class FirefoxDebugSession {
 				return;
 			}
 
+			this.firefoxDebugSocketClosedPromise = new Promise(resolve => {
+				socket.once('close', () => {
+					log.info('Connection to Firefox closed - terminating debug session');
+					this.firefoxDebugSocketClosed = true;
+					resolve();
+					this.sendEvent(new TerminatedEvent());
+				});
+			});
 			this.firefoxDebugConnection = new DebugConnection(this.config.enableCRAWorkaround, this.pathMapper, socket);
 			this.sourceMaps = this.firefoxDebugConnection.sourceMaps;
 			let rootActor = this.firefoxDebugConnection.rootActor;
@@ -172,12 +181,6 @@ export class FirefoxDebugSession {
 				}
 
 				resolve();
-			});
-
-			socket.on('close', () => {
-				log.info('Connection to Firefox closed - terminating debug session');
-				this.firefoxDebugSocketClosed = true;
-				this.sendEvent(new TerminatedEvent());
 			});
 
 			if (this.config.reloadOnChange) {
@@ -340,7 +343,7 @@ export class FirefoxDebugSession {
 			log.debug('Trying to close Firefox using the Terminator WebExtension');
 			const terminatorPath = path.join(__dirname, 'terminator');
 			await this.addonsActor.installAddon(terminatorPath);
-			await Promise.race([ this.firefoxClosedPromise, delay(1000) ]);
+			await Promise.race([ this.firefoxDebugSocketClosedPromise, delay(1000) ]);
 
 		}
 
