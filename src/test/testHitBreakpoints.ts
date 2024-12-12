@@ -102,6 +102,8 @@ describe('Hitting breakpoints: The debugger', function() {
 
 	it('should break on a debugger statement', async function() {
 
+		await dc.setExceptionBreakpointsRequest({filters: [ 'debugger' ]});
+
 		let stoppedEvent = await util.runCommandAndReceiveStoppedEvent(dc, 
 			() => util.evaluate(dc, 'loadScript("debuggerStatement.js")'));
 
@@ -115,6 +117,21 @@ describe('Hitting breakpoints: The debugger', function() {
 
 		assert.equal(stoppedEvent.body.allThreadsStopped, false);
 		assert.equal(stoppedEvent.body.reason, 'debuggerStatement');
+	});
+
+	it('should not break on a debugger statement when those are disabled', async function() {
+
+		await dc.setExceptionBreakpointsRequest({filters: []});
+
+		let stoppedPromise = util.runCommandAndReceiveStoppedEvent(dc, 
+			() => util.evaluate(dc, 'loadScript("debuggerStatement.js")'));
+		
+		await util.assertPromiseTimeout(stoppedPromise, 500);
+
+		stoppedPromise = util.runCommandAndReceiveStoppedEvent(dc, 
+			() => util.evaluate(dc, 'debuggerStatement()'));
+		
+		await util.assertPromiseTimeout(stoppedPromise, 500);
 	});
 
 	it('should not hit a breakpoint after it has been removed', async function() {

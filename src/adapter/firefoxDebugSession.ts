@@ -14,7 +14,7 @@ import { DebugConnection } from './firefox/connection';
 import { ObjectGripActorProxy } from './firefox/actorProxy/objectGrip';
 import { LongStringGripActorProxy } from './firefox/actorProxy/longString';
 import { AddonsActorProxy } from './firefox/actorProxy/addons';
-import { ExceptionBreakpoints, IThreadActorProxy } from './firefox/actorProxy/thread';
+import { IThreadActorProxy } from './firefox/actorProxy/thread';
 import { ConsoleActorProxy } from './firefox/actorProxy/console';
 import { ISourceActorProxy } from './firefox/actorProxy/source';
 import { FrameAdapter } from './adapter/frame';
@@ -44,6 +44,11 @@ import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
+
+export type ThreadConfiguration = Pick<
+	FirefoxDebugProtocol.ThreadConfiguration,
+	'pauseOnExceptions' | 'ignoreCaughtExceptions' | 'shouldPauseOnDebuggerStatement'
+>;
 
 export class FirefoxDebugSession {
 
@@ -75,9 +80,10 @@ export class FirefoxDebugSession {
 	public readonly threadConfigurators = new Registry<ThreadConfigurationActorProxy>();
 	private readonly threadsByTargetActorName = new Map<string, ThreadAdapter>();
 
-	public threadConfiguration: Pick<FirefoxDebugProtocol.ThreadConfiguration, 'pauseOnExceptions' | 'ignoreCaughtExceptions'> = {
+	public threadConfiguration: ThreadConfiguration = {
 		pauseOnExceptions: true,
-		ignoreCaughtExceptions: true
+		ignoreCaughtExceptions: true,
+		shouldPauseOnDebuggerStatement: true,
 	};
 
 	private reloadTabs = false;
@@ -233,12 +239,9 @@ export class FirefoxDebugSession {
 		await this.disconnectFirefoxAndCleanup();
 	}
 
-	public setExceptionBreakpoints(exceptionBreakpoints: ExceptionBreakpoints) {
+	public setThreadConfiguration(threadConfiguration: ThreadConfiguration) {
 
-		this.threadConfiguration = {
-			pauseOnExceptions: (exceptionBreakpoints !== ExceptionBreakpoints.None),
-			ignoreCaughtExceptions: (exceptionBreakpoints !== ExceptionBreakpoints.All)
-		};
+		this.threadConfiguration = threadConfiguration;
 
 		for (let [, threadConfigurator] of this.threadConfigurators) {
 			threadConfigurator.updateConfiguration(this.threadConfiguration);

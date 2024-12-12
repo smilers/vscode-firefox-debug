@@ -4,12 +4,11 @@ import { DebugSession, StoppedEvent, OutputEvent, Thread, Variable, Breakpoint }
 import { Log } from './util/log';
 import { accessorExpression } from './util/misc';
 import { DebugAdapterBase } from './debugAdapterBase';
-import { ExceptionBreakpoints } from './firefox/actorProxy/thread';
 import { ThreadAdapter } from './adapter/thread';
 import { SourceAdapter } from './adapter/source';
 import { LaunchConfiguration, AttachConfiguration } from '../common/configuration';
 import { parseConfiguration } from './configuration';
-import { FirefoxDebugSession } from './firefoxDebugSession';
+import { FirefoxDebugSession, ThreadConfiguration } from './firefoxDebugSession';
 import { popupAutohidePreferenceKey } from './adapter/addonManager';
 import { ObjectGripAdapter } from './adapter/objectGrip';
 import { DataBreakpointsManager } from './adapter/dataBreakpointsManager';
@@ -54,6 +53,11 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 				{
 					filter: 'uncaught',
 					label: 'Uncaught Exceptions',
+					default: true
+				},
+				{
+					filter: 'debugger',
+					label: 'Debugger Statements',
 					default: true
 				}
 			]
@@ -123,15 +127,13 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 	protected setExceptionBreakpoints(args: DebugProtocol.SetExceptionBreakpointsArguments): void {
 		log.debug(`Setting exception filters: ${JSON.stringify(args.filters)}`);
 
-		let exceptionBreakpoints = ExceptionBreakpoints.None;
+		const threadConfiguration: ThreadConfiguration = {
+			pauseOnExceptions: args.filters.includes('all') || args.filters.includes('uncaught'),
+			ignoreCaughtExceptions: !args.filters.includes('all'),
+			shouldPauseOnDebuggerStatement: args.filters.includes('debugger'),
+		};
 
-		if (args.filters.indexOf('all') >= 0) {
-			exceptionBreakpoints = ExceptionBreakpoints.All;
-		} else if (args.filters.indexOf('uncaught') >= 0) {
-			exceptionBreakpoints = ExceptionBreakpoints.Uncaught;
-		}
-
-		this.session.setExceptionBreakpoints(exceptionBreakpoints);
+		this.session.setThreadConfiguration(threadConfiguration);
 	}
 
 	protected async pause(args: DebugProtocol.PauseArguments): Promise<void> {

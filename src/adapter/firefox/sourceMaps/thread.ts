@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Log } from '../../util/log';
 import { DebugConnection } from '../connection';
-import { IThreadActorProxy, ExceptionBreakpoints, AttachOptions } from '../actorProxy/thread';
+import { IThreadActorProxy } from '../actorProxy/thread';
 
 let log = Log.create('SourceMappingThreadActorProxy');
 

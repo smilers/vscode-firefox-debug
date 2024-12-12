@@ -6,12 +6,6 @@ import { ActorProxy } from './interface';
 
 let log = Log.create('ThreadActorProxy');
 
-export interface AttachOptions {
-	ignoreFrameEnvironment?: boolean;
-	pauseOnExceptions?: boolean;
-	ignoreCaughtExceptions?: boolean;
-}
-
 export interface IThreadActorProxy {
 	name: string;
 	resume(resumeLimitType?: 'next' | 'step' | 'finish' | 'restart', frameActorID?: string): Promise<void>;
@@ -22,10 +16,6 @@ export interface IThreadActorProxy {
 	onWrongState(cb: () => void): void;
 	onNewGlobal(cb: () => void): void;
 	dispose(): void;
-}
-
-export enum ExceptionBreakpoints {
-	All, Uncaught, None
 }
 
 /**
