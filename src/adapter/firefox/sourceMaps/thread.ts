@@ -34,8 +34,8 @@ export class SourceMappingThreadActorProxy extends EventEmitter implements IThre
 		return this.underlyingActorProxy.pauseOnExceptions(pauseOnExceptions, ignoreCaughtExceptions);
 	}
 
-	public resume(resumeLimitType?: "next" | "step" | "finish" | undefined): Promise<void> {
-		return this.underlyingActorProxy.resume(resumeLimitType);
+	public resume(resumeLimitType?: 'next' | 'step' | 'finish' | 'restart', frameActorID?: string): Promise<void> {
+		return this.underlyingActorProxy.resume(resumeLimitType, frameActorID);
 	}
 
 	public interrupt(immediately: boolean = true): Promise<void> {

@@ -141,6 +141,10 @@ export class ThreadAdapter extends EventEmitter {
 		return this.actor.resume('finish');
 	}
 
+	public restartFrame(frameActor: string): Promise<void> {
+		return this.actor.resume('restart', frameActor);
+	}
+
 	public fetchAllStackFrames(): Promise<FrameAdapter[]> {
 
 		if (!this.framesPromise) {

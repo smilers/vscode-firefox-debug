@@ -14,7 +14,7 @@ export interface AttachOptions {
 
 export interface IThreadActorProxy {
 	name: string;
-	resume(resumeLimitType?: 'next' | 'step' | 'finish'): Promise<void>;
+	resume(resumeLimitType?: 'next' | 'step' | 'finish' | 'restart', frameActorID?: string): Promise<void>;
 	interrupt(immediately?: boolean): Promise<void>;
 	fetchStackFrames(start?: number, count?: number): Promise<FirefoxDebugProtocol.Frame[]>;
 	pauseOnExceptions(pauseOnExceptions: boolean, ignoreCaughtExceptions: boolean): Promise<void>;
@@ -37,7 +37,6 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 
 	constructor(
 		public readonly name: string,
-		private readonly enableCRAWorkaround: boolean,
 		private connection: DebugConnection
 	) {
 		super();
@@ -56,7 +55,10 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 	/**
 	 * Resume the thread if it is paused
 	 */
-	public resume(resumeLimitType?: 'next' | 'step' | 'finish'): Promise<void> {
+	public resume(resumeLimitType?: 'next' | 'step' | 'finish' | 'restart', frameActorID?: string): Promise<void> {
+		if (resumeLimitType === 'restart' && !frameActorID) {
+			throw new Error('Restart frame requested without a frameActor');
+		}
 
 		if (!this.resumePromise) {
 			log.debug(`Resuming thread ${this.name}`);
@@ -65,7 +67,7 @@ export class ThreadActorProxy extends EventEmitter implements ActorProxy, IThrea
 
 			this.resumePromise = new Promise<void>((resolve, reject) => {
 				this.pendingResumeRequest = { resolve, reject };
-				this.connection.sendRequest({ to: this.name, type: 'resume', resumeLimit });
+				this.connection.sendRequest({ to: this.name, type: 'resume', resumeLimit, frameActorID });
 			});
 			this.interruptPromise = undefined;
 

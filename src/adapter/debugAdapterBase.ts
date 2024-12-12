@@ -38,6 +38,7 @@ export abstract class DebugAdapterBase extends DebugSession {
 	protected abstract getCompletions(args: DebugProtocol.CompletionsArguments): Promise<{ targets: DebugProtocol.CompletionItem[] }>;
 	protected abstract dataBreakpointInfo(args: DebugProtocol.DataBreakpointInfoArguments): Promise<{ dataId: string | null, description: string, accessTypes?: DebugProtocol.DataBreakpointAccessType[], canPersist?: boolean }>;
 	protected abstract setDataBreakpoints(args: DebugProtocol.SetDataBreakpointsArguments): Promise<{ breakpoints: DebugProtocol.Breakpoint[] }>;
+	protected abstract restartFrame(args: DebugProtocol.RestartFrameArguments): Promise<void>;
 	protected abstract reloadAddon(): Promise<void>;
 	protected abstract toggleSkippingFile(url: string): Promise<void>;
 	protected abstract setPopupAutohide(popupAutohide: boolean): Promise<void>;
@@ -129,6 +130,10 @@ export abstract class DebugAdapterBase extends DebugSession {
 
 	protected setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): void {
 		this.handleRequestAsync(response, () => this.setDataBreakpoints(args));
+	}
+
+	protected restartFrameRequest(response: DebugProtocol.RestartFrameResponse, args: DebugProtocol.RestartFrameArguments): void {
+		this.handleRequestAsync(response, () => this.restartFrame(args));
 	}
 
 	protected customRequest(command: string, response: DebugProtocol.Response, args: any): void {

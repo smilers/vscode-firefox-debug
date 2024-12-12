@@ -44,6 +44,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 			supportsLogPoints: true,
 			supportsDataBreakpoints: true,
 			supportsBreakpointLocationsRequest: true,
+			supportsRestartFrame: true,
 			exceptionBreakpointFilters: [
 				{
 					filter: 'all',
@@ -444,6 +445,18 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 
 		await this.session.dataBreakpointsManager.setDataBreakpoints(args.breakpoints);
 		return { breakpoints: new Array(args.breakpoints.length).fill({ verified: true }) }
+	}
+
+	protected async restartFrame(args: DebugProtocol.RestartFrameArguments): Promise<void> {
+
+		const frameAdapter = this.session.frames.find(args.frameId);
+		if (!frameAdapter) {
+			throw new Error('Failed restartFrameRequest: the requested frame can\'t be found');
+		}
+
+		this.session.setActiveThread(frameAdapter.threadAdapter);
+
+		await frameAdapter.threadAdapter.restartFrame(frameAdapter.frame.actor);
 	}
 
 	protected async reloadAddon(): Promise<void> {

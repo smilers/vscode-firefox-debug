@@ -80,6 +80,28 @@ describe('Stepping: The debugger', function() {
 		assert.equal(stackTrace.body.stackFrames[0].line, 21);
 	});
 
+	it('should restart a frame', async function() {
+
+		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
+		await util.setBreakpoints(dc, sourcePath, [ 11 ]);
+
+		util.evaluate(dc, 'vars()');
+		let stoppedEvent = await util.receiveStoppedEvent(dc);
+		let threadId = stoppedEvent.body.threadId!;
+
+		let stackTrace = await dc.stackTraceRequest({ threadId });
+		assert.equal(stackTrace.body.stackFrames[0].source!.path, sourcePath);
+		assert.equal(stackTrace.body.stackFrames[0].line, 11);
+
+		const frameId = stackTrace.body.stackFrames[0].id;
+		dc.restartFrameRequest({ frameId });
+		await util.receiveStoppedEvent(dc);
+
+		stackTrace = await dc.stackTraceRequest({ threadId });
+		assert.equal(stackTrace.body.stackFrames[0].source!.path, sourcePath);
+		assert.equal(stackTrace.body.stackFrames[0].line, 8);
+	});
+
 	it('should step into an eval()', async function() {
 
 		let evalExpr = 'factorial(5)';
