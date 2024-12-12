@@ -1,3 +1,6 @@
+### Version 2.10.1
+* fix path mapping on Windows
+
 ### Version 2.10.0
 * migrate to new debug protocol methods
 * fix breakpoints not working after navigating
