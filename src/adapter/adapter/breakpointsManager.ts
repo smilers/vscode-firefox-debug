@@ -146,7 +146,7 @@ export class BreakpointsManager {
 	}
 
 	public getBreakpoints(sourcePathOrUrl: string) {
-		return this.breakpointsBySourcePathOrUrl.get(sourcePathOrUrl);
+		return this.breakpointsBySourcePathOrUrl.get(normalizePath(sourcePathOrUrl));
 	}
 
 	private verifyBreakpoint(breakpointInfo: BreakpointInfo): void {
