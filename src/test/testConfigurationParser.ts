@@ -688,7 +688,7 @@ describe('The configuration parser', function() {
 			tmpDir
 		});
 
-		assert.ok(parsedConfiguration.launch!.profileDir.startsWith(tmpDir + '/vscode-firefox-debug-profile-'));
+		assert.ok(parsedConfiguration.launch!.profileDir.startsWith(path.join(tmpDir + '/vscode-firefox-debug-profile-')));
 	});
 
 	it('should parse user-specified Firefox preferences', async function() {
