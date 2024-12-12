@@ -13,6 +13,7 @@ import { FirefoxDebugSession } from './firefoxDebugSession';
 import { popupAutohidePreferenceKey } from './adapter/addonManager';
 import { ObjectGripAdapter } from './adapter/objectGrip';
 import { DataBreakpointsManager } from './adapter/dataBreakpointsManager';
+import { normalizePath } from './util/fs';
 
 let log = Log.create('FirefoxDebugAdapter');
 
@@ -80,7 +81,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 	): Promise<{ breakpoints: DebugProtocol.BreakpointLocation[]; }> {
 		if (!args.source.path) return { breakpoints: [] };
 
-		const sourceAdapter = await this.session.sources.getAdapterForPath(args.source.path);
+		const sourceAdapter = await this.session.sources.getAdapterForPath(normalizePath(args.source.path));
 		const positions = await sourceAdapter.getBreakableLocations(args.line);
 		const breakpoints: DebugProtocol.BreakpointLocation[] = [];
 		for (const position of positions) {

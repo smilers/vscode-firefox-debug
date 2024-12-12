@@ -1,15 +1,12 @@
 import { Log } from '../util/log';
-import { isWindowsPlatform as detectWindowsPlatform } from '../../common/util';
 import { BreakpointInfo } from './breakpoint';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { Event, Breakpoint, BreakpointEvent } from 'vscode-debugadapter';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
 import { SourceMappingSourceActorProxy } from '../firefox/sourceMaps/source';
+import { normalizePath } from '../util/fs';
 
 let log = Log.create('BreakpointsManager');
-
-const isWindowsPlatform = detectWindowsPlatform();
-const windowsAbsolutePathRegEx = /^[a-zA-Z]:\\/;
 
 /**
  * This class holds all breakpoints that have been set in VS Code and synchronizes them with all
@@ -70,7 +67,7 @@ export class BreakpointsManager {
 
 		log.debug(`Setting ${breakpoints.length} breakpoints for ${sourcePathOrUrl}`);
 
-		const normalizedPathOrUrl = this.normalizePathOrUrl(sourcePathOrUrl);
+		const normalizedPathOrUrl = normalizePath(sourcePathOrUrl);
 		const oldBreakpointInfos = this.breakpointsBySourcePathOrUrl.get(normalizedPathOrUrl);
 		const breakpointInfos = breakpoints.map(
 			breakpoint => this.getOrCreateBreakpointInfo(breakpoint, oldBreakpointInfos)
@@ -162,14 +159,6 @@ export class BreakpointsManager {
 		this.session.sendEvent(new BreakpointEvent('changed', breakpoint));
 
 		breakpointInfo.verified = true;
-	}
-
-	private normalizePathOrUrl(sourcePathOrUrl: string): string {
-		if (isWindowsPlatform && windowsAbsolutePathRegEx.test(sourcePathOrUrl)) {
-			return sourcePathOrUrl.toLowerCase();
-		} else {
-			return sourcePathOrUrl;
-		}
 	}
 
 	private getOrCreateBreakpointInfo(

@@ -5,6 +5,7 @@ import { pathsAreEqual } from "../util/misc";
 import { PathMapper } from "../util/pathMapper";
 import { Registry } from "./registry";
 import { SourceAdapter } from './source';
+import { normalizePath } from '../util/fs';
 
 const log = Log.create('SourcesManager');
 
@@ -21,13 +22,14 @@ export class SourcesManager {
 		log.debug(`Adding source ${actor.name}`);
 
 		let adapter: SourceAdapter | undefined = actor.url ? this.adaptersByUrl.get(actor.url) : undefined;
+		const path = this.pathMapper.convertFirefoxSourceToPath(actor.source);
+		const normalizedPath = path ? normalizePath(path) : undefined;
 
 		if (adapter) {
 			adapter.actors.push(actor);
 		} else {
-			const path = this.pathMapper.convertFirefoxSourceToPath(actor.source);
-			if (path) {
-				adapter = this.adaptersByPath.getExisting(path);
+			if (normalizedPath) {
+				adapter = this.adaptersByPath.getExisting(normalizedPath);
 			}
 			if (adapter) {
 				adapter.actors.push(actor);
@@ -36,8 +38,8 @@ export class SourcesManager {
 			}
 		}
 
-		if (adapter.path) {
-			this.adaptersByPath.set(adapter.path, adapter);
+		if (normalizedPath) {
+			this.adaptersByPath.set(normalizedPath, adapter);
 		}
 		this.adaptersByActor.set(actor.name, adapter);
 		if (actor.url) {
