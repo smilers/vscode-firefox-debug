@@ -1,3 +1,8 @@
+### Version 2.11.0
+* support restarting frames
+* support skipping debugger statements
+* fix breakpoints with hit counts on Windows
+
 ### Version 2.10.1
 * fix path mapping on Windows
 
