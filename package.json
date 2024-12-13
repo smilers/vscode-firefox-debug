@@ -295,6 +295,7 @@
         "label": "Firefox",
         "program": "./dist/adapter.bundle.js",
         "runtime": "node",
+        "languages": ["html"],
         "initialConfigurations": [
           {
             "name": "Launch index.html",

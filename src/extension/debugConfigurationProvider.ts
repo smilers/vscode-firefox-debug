@@ -1,3 +1,4 @@
+import path from 'path';
 import * as vscode from 'vscode';
 import { LaunchConfiguration, AttachConfiguration } from '../common/configuration';
 import { vscodeUriToPath } from './pathMappingWizard';
@@ -21,6 +22,26 @@ export class DebugConfigurationProvider implements vscode.DebugConfigurationProv
 		folder: vscode.WorkspaceFolder | undefined,
 		debugConfiguration: vscode.DebugConfiguration & (LaunchConfiguration | AttachConfiguration)
 	): vscode.DebugConfiguration {
+
+		if (!debugConfiguration.type) {
+			// The user wants to debug without a launch configuration - we create one for
+			// opening the currently active HTML file in Firefox
+			const document = vscode.window.activeTextEditor?.document;
+			if (!document || document.languageId !== 'html') {
+				throw new Error("Please open an HTML file for debugging");
+			}
+			if (document.uri.scheme !== 'file') {
+				throw new Error("Debugging without a launch configuration is not supported in remote workspaces");
+			}
+
+			const file = document.uri.fsPath;
+			return {
+				name: `Debug ${path.basename(file)} with Firefox`,
+				type: 'firefox',
+				request: 'launch',
+				file
+			};
+		}
 
 		debugConfiguration = { ...debugConfiguration };
 
