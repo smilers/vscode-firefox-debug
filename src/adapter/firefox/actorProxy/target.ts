@@ -8,7 +8,7 @@ const log = Log.create('TargetActorProxy');
 export class TargetActorProxy extends BaseActorProxy {
 
 	constructor(name: string, connection: DebugConnection) {
-		super(name, [], connection);
+		super(name, connection, log);
 	}
 
 	public onConsoleMessages(cb: (consoleMessages: FirefoxDebugProtocol.ConsoleMessage[]) => void) {
@@ -74,7 +74,7 @@ export class TargetActorProxy extends BaseActorProxy {
 		} else if (event.type === 'frameUpdate') {
 			log.debug("frameUpdate from TargetActor: " + JSON.stringify(event));
 		} else {
-			log.warn("Unknown message from TargetActor: " + JSON.stringify(event));
+			log.warn(`Unknown message: ${JSON.stringify(event)}`);
 		}
 	}
 }

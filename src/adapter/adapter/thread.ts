@@ -274,12 +274,4 @@ export class ThreadAdapter extends EventEmitter {
 
 		this.debugSession.threads.unregister(this.id);
 	}
-
-	public onExited(cb: () => void) {
-		this.actor.onExited(cb);
-	}
-
-	public onWrongState(cb: () => void) {
-		this.actor.onWrongState(cb);
-	}
 }

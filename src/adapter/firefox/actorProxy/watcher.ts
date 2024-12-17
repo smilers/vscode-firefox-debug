@@ -16,7 +16,7 @@ const log = Log.create('WatcherActorProxy');
 export class WatcherActorProxy extends BaseActorProxy {
 
 	constructor(name: string, connection: DebugConnection) {
-		super(name, [], connection);
+		super(name, connection, log);
 	}
 
 	public async getBreakpointList() {
@@ -61,7 +61,7 @@ export class WatcherActorProxy extends BaseActorProxy {
 		} else if (event.type === 'target-destroyed-form') {
 			this.emit('targetDestroyed', event.target.actor);
 		} else {
-			log.warn("Unknown message from WatcherActor: " + JSON.stringify(event));
+			log.warn(`Unknown message: ${JSON.stringify(event)}`);
 		}
 	}
 }

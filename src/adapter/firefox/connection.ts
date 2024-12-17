@@ -18,25 +18,21 @@ export class DebugConnection {
 	public readonly sourceMaps: SourceMapsManager;
 	public readonly rootActor: RootActorProxy;
 
-	constructor(
-		enableCRAWorkaround: boolean,
-		pathMapper: PathMapper,
-		socket: Socket
-	) {
+	constructor(pathMapper: PathMapper, socket: Socket) {
 
 		this.actors = new Map<string, ActorProxy>();
 		this.sourceMaps = new SourceMapsManager(pathMapper, this);
-		this.rootActor = new RootActorProxy(enableCRAWorkaround, this);
+		this.rootActor = new RootActorProxy(this);
 		this.transport = new DebugProtocolTransport(socket);
 
-		this.transport.on('message', (response: FirefoxDebugProtocol.Response) => {
-			if (this.actors.has(response.from)) {
+		this.transport.on('message', (message: FirefoxDebugProtocol.Response) => {
+			if (this.actors.has(message.from)) {
 				if (log.isDebugEnabled()) {
-					log.debug(`Received response/event ${JSON.stringify(response)}`);
+					log.debug(`Received response/event ${JSON.stringify(message)}`);
 				}
-				this.actors.get(response.from)!.receiveResponse(response);
+				this.actors.get(message.from)!.receiveMessage(message);
 			} else {
-				log.error('Unknown actor: ' + JSON.stringify(response));
+				log.error('Unknown actor: ' + JSON.stringify(message));
 			}
 		});
 	}

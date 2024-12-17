@@ -1,7 +1,6 @@
 import { Log } from '../../util/log';
 import { DebugConnection } from '../connection';
-import { ActorProxy } from './interface';
-import { PendingRequests } from '../../util/pendingRequests';
+import { BaseActorProxy } from './base';
 
 let log = Log.create('PreferenceActorProxy');
 
@@ -9,16 +8,10 @@ let log = Log.create('PreferenceActorProxy');
  * Proxy class for a preference actor
  * ([spec](https://github.com/mozilla/gecko-dev/blob/master/devtools/shared/specs/preference.js))
  */
-export class PreferenceActorProxy implements ActorProxy {
+export class PreferenceActorProxy extends BaseActorProxy {
 
-	private pendingGetPrefRequests = new PendingRequests<string>();
-	private pendingSetPrefRequests = new PendingRequests<void>();
-
-	constructor(
-		public readonly name: string,
-		private connection: DebugConnection
-	) {
-		this.connection.register(this);
+	constructor(name: string, connection: DebugConnection) {
+		super(name, connection, log);
 	}
 
 	public async getBoolPref(pref: string): Promise<boolean> {
@@ -59,21 +52,15 @@ export class PreferenceActorProxy implements ActorProxy {
 
 	}
 
-	private getPref(
+	private async getPref(
 		pref: string,
 		type: 'Bool' | 'Char' | 'Int'
 	): Promise<string> {
-
-		log.debug(`Getting preference value for ${pref}`);
-
-		return new Promise<string>((resolve, reject) => {
-			this.pendingGetPrefRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ 
-				to: this.name,
-				type: `get${type}Pref`,
-				value: pref
-			});
+		const response: { value: any } = await this.sendRequest({
+			type: `get${type}Pref`,
+			value: pref
 		});
+		return response.value.toString();
 	}
 
 	private setPref(
@@ -81,39 +68,10 @@ export class PreferenceActorProxy implements ActorProxy {
 		val: boolean | string | number,
 		type: 'Bool' | 'Char' | 'Int'
 	): Promise<void> {
-
-		log.debug(`Setting preference value for ${pref} to ${val}`);
-
-		return new Promise<void>((resolve, reject) => {
-			this.pendingSetPrefRequests.enqueue({ resolve, reject });
-			this.connection.sendRequest({ 
-				to: this.name,
-				type: `set${type}Pref`,
-				name: pref,
-				value: val
-			});
+		return this.sendRequest({ 
+			type: `set${type}Pref`,
+			name: pref,
+			value: val
 		});
-	}
-
-	receiveResponse(response: any): void {
-
-		if (response['value'] !== undefined) {
-
-			this.pendingGetPrefRequests.resolveOne(response['value'].toString());
-
-		} else if (Object.keys(response).length === 1) {
-
-			this.pendingSetPrefRequests.resolveOne(undefined);
-
-		} else if (response['error']) {
-
-			log.warn("Error from PreferenceActor: " + JSON.stringify(response));
-			this.pendingGetPrefRequests.rejectOne(response['message'] || response['error']);
-
-		} else {
-
-			log.warn("Unknown message from PreferenceActor: " + JSON.stringify(response));
-
-		}
 	}
 }

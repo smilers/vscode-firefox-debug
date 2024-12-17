@@ -64,7 +64,7 @@ export class FrameAdapter {
 
 		if (!this._scopeAdapters) {
 
-			const frameActor = new FrameActorProxy(this.frame, this.threadAdapter.debugSession.firefoxDebugConnection);
+			const frameActor = new FrameActorProxy(this.frame.actor, this.threadAdapter.debugSession.firefoxDebugConnection);
 			const environment = await frameActor.getEnvironment();
 			frameActor.dispose();
 

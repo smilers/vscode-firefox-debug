@@ -135,7 +135,7 @@ export class FirefoxDebugSession {
 					this.sendEvent(new TerminatedEvent());
 				});
 			});
-			this.firefoxDebugConnection = new DebugConnection(this.config.enableCRAWorkaround, this.pathMapper, socket);
+			this.firefoxDebugConnection = new DebugConnection(this.pathMapper, socket);
 			this.sourceMaps = this.firefoxDebugConnection.sourceMaps;
 			let rootActor = this.firefoxDebugConnection.rootActor;
 
@@ -270,7 +270,7 @@ export class FirefoxDebugSession {
 
 	public getOrCreateObjectGripActorProxy(objectGrip: FirefoxDebugProtocol.ObjectGrip): ObjectGripActorProxy {
 		return this.firefoxDebugConnection.getOrCreate(objectGrip.actor, () =>
-			new ObjectGripActorProxy(objectGrip, this.firefoxDebugConnection));
+			new ObjectGripActorProxy(objectGrip.actor, this.firefoxDebugConnection));
 	}
 
 	public getOrCreateLongStringGripActorProxy(longStringGrip: FirefoxDebugProtocol.LongStringGrip): LongStringGripActorProxy {

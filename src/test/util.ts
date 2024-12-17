@@ -270,7 +270,7 @@ export async function setConsoleThread(dc: DebugClient, threadId: number): Promi
 	try {
 		// TODO explain (only used for side effect that the "active" thread is set)
 		// await dc.stackTraceRequest({ threadId });
-		await dc.pauseRequest({ threadId });
+		// await dc.pauseRequest({ threadId });
 		await dc.continueRequest({ threadId });
 	} catch(e) {}
 }

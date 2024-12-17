@@ -236,12 +236,12 @@ declare namespace FirefoxDebugProtocol {
 	}
 
 	interface ResultIDResponse extends Response {
-		resultID: number;
+		resultID: string;
 	}
 
 	interface EvaluationResultResponse extends TypedResponse {
 		input: string;
-		resultID: number;
+		resultID: string;
 		result: Grip;
 		exception?: Grip | null;
 		exceptionMessage?: string;

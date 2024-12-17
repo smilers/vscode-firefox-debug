@@ -7,7 +7,7 @@ const log = Log.create('BreakpointListActorProxy');
 export class BreakpointListActorProxy extends BaseActorProxy {
 
 	constructor(name: string, connection: DebugConnection) {
-		super(name, [], connection);
+		super(name, connection, log);
 	}
 
 	public async setBreakpoint(sourceUrl: string, line: number, column: number, condition?: string, logValue?: string) {
@@ -20,9 +20,5 @@ export class BreakpointListActorProxy extends BaseActorProxy {
 
 	public async removeBreakpoint(sourceUrl: string, line: number, column: number) {
 		await this.sendRequest({ type: 'removeBreakpoint', location: { sourceUrl, line, column } });
-	}
-
-	handleEvent(event: FirefoxDebugProtocol.Event): void {
-		log.warn("Unknown message from BreakpointListActor: " + JSON.stringify(event));
 	}
 }

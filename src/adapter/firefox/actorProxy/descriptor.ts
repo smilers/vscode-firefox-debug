@@ -11,7 +11,7 @@ let log = Log.create('DescriptorActorProxy');
 export class DescriptorActorProxy extends BaseActorProxy {
 
 	constructor(name: string, connection: DebugConnection) {
-		super(name, [], connection);
+		super(name, connection, log);
 	}
 
 	public async getWatcher(): Promise<WatcherActorProxy> {
@@ -35,7 +35,7 @@ export class DescriptorActorProxy extends BaseActorProxy {
 			log.debug(`Descriptor ${this.name} destroyed`);
 			this.emit('destroyed');
 		} else {
-			log.warn("Unknown message from DescriptorActor: " + JSON.stringify(event));
+			log.warn(`Unknown message: ${JSON.stringify(event)}`);
 		}
 	}
 }

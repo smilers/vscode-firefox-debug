@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { DebugConnection } from '../connection';
 import { ActorProxy } from './interface';
 import { PendingRequests } from '../../util/pendingRequests';
+import { Log } from '../../util/log';
 
 export abstract class BaseActorProxy extends EventEmitter implements ActorProxy {
 
@@ -10,8 +11,8 @@ export abstract class BaseActorProxy extends EventEmitter implements ActorProxy 
 
 	constructor(
 		public readonly name: string,
-		private readonly responseTypes: string[],
-		protected readonly connection: DebugConnection
+		protected readonly connection: DebugConnection,
+		private readonly log: Log
 	) {
 		super();
 		this.connection.register(this);
@@ -24,11 +25,18 @@ export abstract class BaseActorProxy extends EventEmitter implements ActorProxy 
 		});
 	}
 
-	sendCachedRequest<T extends Omit<FirefoxDebugProtocol.Request, 'to'>, R, S>(key: string, request: T, convert: (r: R) => S): Promise<S> {
+	sendCachedRequest<T extends Omit<FirefoxDebugProtocol.Request, 'to'>, R, S>(key: string, request: T, convert?: (r: R) => S): Promise<S> {
 		if (!this.cachedRequestPromises.has(key)) {
-			this.cachedRequestPromises.set(key, (async () => convert(await this.sendRequest(request)))());
+			this.cachedRequestPromises.set(key, (async () => {
+				const response: R = await this.sendRequest(request);
+				return convert ? convert(response) : response;
+			})());
 		}
 		return this.cachedRequestPromises.get(key)!;
+	}
+
+	sendRequestWithoutResponse<T extends Omit<FirefoxDebugProtocol.Request, 'to'>>(request: T): void {
+		this.connection.sendRequest({ ...request, to: this.name });
 	}
 
 	async getRequestTypes(): Promise<string[]> {
@@ -37,12 +45,18 @@ export abstract class BaseActorProxy extends EventEmitter implements ActorProxy 
 		).requestTypes;
 	}
 
-	abstract handleEvent(event: FirefoxDebugProtocol.Event): void;
+	isEvent(message: FirefoxDebugProtocol.Response): boolean {
+		return !!message.type;
+	}
 
-	receiveResponse(message: FirefoxDebugProtocol.Response): void {
+	handleEvent(event: FirefoxDebugProtocol.Event): void {
+		this.log.warn(`Unknown message: ${JSON.stringify(event)}`);
+	}
+
+	receiveMessage(message: FirefoxDebugProtocol.Response): void {
 		if (message.error) {
 			this.pendingRequests.rejectOne(message);
-		} else if (message.type && !this.responseTypes.includes(message.type)) {
+		} else if (this.isEvent(message)) {
 			this.handleEvent(message as FirefoxDebugProtocol.Event);
 		} else {
 			this.pendingRequests.resolveOne(message);

@@ -9,5 +9,5 @@ export interface ActorProxy {
 	readonly name: string;
 
 	/** called by the [DebugConnection](../connection.ts) class to deliver this actor's messages */
-	receiveResponse(response: FirefoxDebugProtocol.Response): void;
+	receiveMessage(response: FirefoxDebugProtocol.Response): void;
 }

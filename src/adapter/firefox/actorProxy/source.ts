@@ -27,7 +27,7 @@ export class SourceActorProxy extends BaseActorProxy implements ISourceActorProx
 		public readonly source: FirefoxDebugProtocol.Source,
 		connection: DebugConnection
 	) {
-		super(source.actor, [], connection);
+		super(source.actor, connection, log);
 	}
 
 	public get url() {
@@ -89,9 +89,5 @@ export class SourceActorProxy extends BaseActorProxy implements ISourceActorProx
 		log.debug(`Setting blackboxing of ${this.url} to ${blackbox}`);
 
 		await this.sendRequest({ type: blackbox ? 'blackbox' : 'unblackbox' });
-	}
-
-	handleEvent(event: FirefoxDebugProtocol.Event): void {
-		log.warn("Unknown message from SourceActor: " + JSON.stringify(event));
 	}
 }
