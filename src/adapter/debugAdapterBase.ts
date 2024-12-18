@@ -1,10 +1,11 @@
 import process from 'process';
+import util from 'util';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { DebugSession } from 'vscode-debugadapter';
 import { Log } from './util/log';
 
 const log = Log.create('main');
-process.on('unhandledRejection', (e: any) => log.error(`Unhandled rejection: ${e}\n${e.stack}`));
+process.on('unhandledRejection', (e: any) => log.error(`Unhandled rejection: ${util.inspect(e)}\n${e.stack}`));
 
 /**
  * This class extends the base class provided by VS Code for debug adapters,

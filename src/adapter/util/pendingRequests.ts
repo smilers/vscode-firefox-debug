@@ -20,7 +20,7 @@ export class PendingRequests<T> {
 			let request = this.pendingRequests.shift()!;
 			request.resolve(t);
 		} else {
-			log.error("Received response without corresponding request!?");
+			log.error(`Received response without corresponding request: ${JSON.stringify(t)}`);
 		}
 	}
 	
@@ -29,7 +29,7 @@ export class PendingRequests<T> {
 			let request = this.pendingRequests.shift()!;
 			request.reject(err);
 		} else {
-			log.error("Received error response without corresponding request!?");
+			log.error(`Received error response without corresponding request: ${JSON.stringify(err)}`);
 		}
 	}
 	

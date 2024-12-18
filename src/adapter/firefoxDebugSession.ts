@@ -407,7 +407,7 @@ export class FirefoxDebugSession {
 		watcherActor.onTargetDestroyed(targetActorName => {
 			const threadAdapter = this.threadsByTargetActorName.get(targetActorName);
 			if (!threadAdapter) {
-				log.warn(`Unknown target actor ${targetActorName}`);
+				log.debug(`Unknown target actor ${targetActorName} (already destroyed?)`);
 				return;
 			}
 			this.threadsByTargetActorName.delete(targetActorName);

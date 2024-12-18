@@ -111,7 +111,7 @@ export class RootActorProxy extends BaseActorProxy {
 			this.emit('init', event);
 		} else if (['tabListChanged', 'addonListChanged'].includes(event.type)) {
 			this.emit(event.type);
-		} else {
+		} else if (event.type !== 'forwardingCancelled') {
 			log.warn(`Unknown message: ${JSON.stringify(event)}`);
 		}
 	}
