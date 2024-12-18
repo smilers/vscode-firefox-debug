@@ -61,7 +61,7 @@ export class ThreadAdapter extends EventEmitter {
 
 	public constructor(
 		public readonly actor: IThreadActorProxy,
-		private readonly targetActor: TargetActorProxy,
+		public readonly targetActor: TargetActorProxy,
 		private readonly consoleActor: ConsoleActorProxy,
 		public readonly name: string,
 		public readonly url: string,

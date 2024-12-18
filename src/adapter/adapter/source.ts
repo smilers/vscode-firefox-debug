@@ -56,8 +56,8 @@ export class SourceAdapter {
 		await Promise.all(this.actors.map(actor => actor.setBlackbox(blackboxed)));
 	}
 
-	public getBreakableLocations(line: number): Promise<MappedLocation[]> {
-		return this.actors[0].getBreakableLocations(line);
+	public async getBreakableLocations(line: number): Promise<MappedLocation[]> {
+		return await this.actors[0]?.getBreakableLocations(line) ?? [];
 	}
 
 	public async findNextBreakableLocation(
@@ -66,6 +66,7 @@ export class SourceAdapter {
 	): Promise<MappedLocation | undefined> {
 
 		const actor = this.actors[0];
+		if (!actor) return;
 
 		let breakableLocations = await actor.getBreakableLocations(requestedLine);
 		for (const location of breakableLocations) {

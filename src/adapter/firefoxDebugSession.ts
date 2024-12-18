@@ -389,6 +389,10 @@ export class FirefoxDebugSession {
 		}
 
 		descriptorActor.onDestroyed(() => {
+			for (const threadAdapter of adapter.threads) {
+				this.sendThreadExitedEvent(threadAdapter);
+				this.threadsByTargetActorName.delete(threadAdapter.targetActor.name);
+			}
 			adapter.dispose();
 		});
 
@@ -410,8 +414,9 @@ export class FirefoxDebugSession {
 				log.debug(`Unknown target actor ${targetActorName} (already destroyed?)`);
 				return;
 			}
-			this.threadsByTargetActorName.delete(targetActorName);
 	
+			this.sendThreadExitedEvent(threadAdapter);
+			this.threadsByTargetActorName.delete(targetActorName);
 			adapter.threads.delete(threadAdapter);
 			threadAdapter.dispose();
 		});

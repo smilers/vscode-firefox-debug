@@ -52,7 +52,9 @@ export class SourcesManager {
 	public removeActor(actor: ISourceActorProxy) {
 		log.info(`Removing source ${actor.name}`);
 
-		const adapter = this.adaptersByActor.getExisting(actor.name)!;
+		const adapter = this.adaptersByActor.getExisting(actor.name);
+		if (!adapter) return;
+
 		this.adaptersByActor.delete(actor.name);
 		const index = adapter.actors.indexOf(actor);
 		if (index >= 0) {
