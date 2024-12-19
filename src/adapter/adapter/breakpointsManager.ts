@@ -1,7 +1,7 @@
 import { Log } from '../util/log';
 import { BreakpointInfo } from './breakpoint';
-import { DebugProtocol } from 'vscode-debugprotocol';
-import { Event, Breakpoint, BreakpointEvent } from 'vscode-debugadapter';
+import { DebugProtocol } from '@vscode/debugprotocol';
+import { Event, Breakpoint, BreakpointEvent } from '@vscode/debugadapter';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
 import { SourceMappingSourceActorProxy } from '../firefox/sourceMaps/source';
 import { normalizePath } from '../util/fs';

@@ -1,5 +1,4 @@
-import { SourceAdapter } from './source';
-import { DebugProtocol } from 'vscode-debugprotocol';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import { MappedLocation } from '../location';
 
 export class BreakpointInfo {

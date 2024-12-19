@@ -1,5 +1,4 @@
-import { DebugProtocol } from 'vscode-debugprotocol';
-import { DebugClient } from 'vscode-debugadapter-testsupport';
+import { DebugClient } from '@vscode/debugadapter-testsupport';
 import * as path from 'path';
 import * as assert from 'assert';
 import * as util from './util';
@@ -36,10 +35,7 @@ describe('Data breakpoints: The debug adapter', function() {
 
 		// set a regular breakpoint after the data breakpoint and remove the data breakpoint
 		await util.setBreakpoints(dc, sourcePath, [ 122 ], true);
-		await dc.customRequest(
-			'setDataBreakpoints',
-			{ breakpoints: [] } as DebugProtocol.SetDataBreakpointsArguments
-		);
+		await dc.setDataBreakpointsRequest({ breakpoints: [] });
 
 		// check that we don't hit the data breakpoint anymore
 		util.evaluate(dc, 'inc(obj)');
@@ -51,10 +47,7 @@ describe('Data breakpoints: The debug adapter', function() {
 		await dc.continueRequest({ threadId: stoppedEvent.body.threadId });
 
 		// re-add the data breakpoint
-		await dc.customRequest(
-			'setDataBreakpoints',
-			{ breakpoints: [ { dataId } ] } as DebugProtocol.SetDataBreakpointsArguments
-		);
+		await dc.setDataBreakpointsRequest({ breakpoints: [ { dataId } ] });
 
 		// check that we hit the data breakpoint again
 		util.evaluate(dc, 'inc(obj)');
@@ -82,21 +75,16 @@ describe('Data breakpoints: The debug adapter', function() {
 		const variable = util.findVariable(variablesResponse.body.variables, 'o');
 
 		// set a data breakpoint on the object's `x` property
-		const dbpInfoResponse = (
-			await dc.customRequest(
-				'dataBreakpointInfo',
-				{ variablesReference: variable.variablesReference, name: 'x' } as DebugProtocol.DataBreakpointInfoArguments
-			)
-		) as DebugProtocol.DataBreakpointInfoResponse;
+		const dbpInfoResponse = await dc.dataBreakpointInfoRequest({
+			variablesReference: variable.variablesReference,
+			name: 'x'
+		});
 		assert.strictEqual(dbpInfoResponse.body.description, 'x');
 		assert.deepStrictEqual(dbpInfoResponse.body.accessTypes, [ 'read', 'write' ]);
 		const dataId = dbpInfoResponse.body.dataId!;
 		assert.strictEqual(!!dataId, true);
 
-		await dc.customRequest(
-			'setDataBreakpoints',
-			{ breakpoints: [ { dataId, accessType: 'write' } ] } as DebugProtocol.SetDataBreakpointsArguments
-		);
+		await dc.setDataBreakpointsRequest({ breakpoints: [ { dataId, accessType: 'write' } ] });
 
 		dc.continueRequest({ threadId: stoppedEvent.body.threadId });
 

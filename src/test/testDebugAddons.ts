@@ -1,5 +1,5 @@
-import { DebugClient } from 'vscode-debugadapter-testsupport';
-import { DebugProtocol } from 'vscode-debugprotocol';
+import { DebugClient } from '@vscode/debugadapter-testsupport';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';

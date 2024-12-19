@@ -1,7 +1,7 @@
 import { ThreadAdapter } from './thread';
 import { FrameAdapter } from './frame';
 import { VariableAdapter } from './variable';
-import { Scope } from 'vscode-debugadapter';
+import { Scope } from '@vscode/debugadapter';
 import { VariablesProvider } from './variablesProvider';
 
 /**

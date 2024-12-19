@@ -1,7 +1,7 @@
 import { Log } from '../util/log';
 import { MappedLocation } from '../location';
-import { DebugProtocol } from 'vscode-debugprotocol';
-import { Source } from 'vscode-debugadapter';
+import { DebugProtocol } from '@vscode/debugprotocol';
+import { Source } from '@vscode/debugadapter';
 import { ISourceActorProxy } from '../firefox/actorProxy/source';
 import { Registry } from './registry';
 

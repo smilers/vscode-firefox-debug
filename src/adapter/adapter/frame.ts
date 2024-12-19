@@ -2,7 +2,7 @@ import { Log } from '../util/log';
 import { ThreadAdapter } from './thread';
 import { EnvironmentAdapter } from './environment';
 import { ScopeAdapter } from './scope';
-import { StackFrame } from 'vscode-debugadapter';
+import { StackFrame } from '@vscode/debugadapter';
 import { Registry } from './registry';
 import { FrameActorProxy } from '../firefox/actorProxy/frame';
 

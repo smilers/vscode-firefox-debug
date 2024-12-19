@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
-import { DebugProtocol } from 'vscode-debugprotocol';
-import { DebugSession, StoppedEvent, OutputEvent, Thread, Variable, Breakpoint } from 'vscode-debugadapter';
+import { DebugProtocol } from '@vscode/debugprotocol';
+import { DebugSession, StoppedEvent, OutputEvent, Thread, Variable, Breakpoint } from '@vscode/debugadapter';
 import { Log } from './util/log';
 import { accessorExpression } from './util/misc';
 import { DebugAdapterBase } from './debugAdapterBase';

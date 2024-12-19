@@ -7,7 +7,7 @@ import { SourceAdapter } from './source';
 import { ObjectGripAdapter } from './objectGrip';
 import { VariablesProvider } from './variablesProvider';
 import { VariableAdapter } from './variable';
-import { Variable } from 'vscode-debugadapter';
+import { Variable } from '@vscode/debugadapter';
 import { Log } from '../util/log';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
 import { Location } from '../location';

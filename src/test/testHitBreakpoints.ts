@@ -1,8 +1,8 @@
-import { DebugClient } from 'vscode-debugadapter-testsupport';
+import { DebugClient } from '@vscode/debugadapter-testsupport';
 import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';
-import { DebugProtocol } from 'vscode-debugprotocol';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import { delay } from '../common/util';
 
 describe('Hitting breakpoints: The debugger', function() {

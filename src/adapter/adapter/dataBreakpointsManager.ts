@@ -1,7 +1,7 @@
 import { Log } from '../util/log';
 import { VariablesProvider } from './variablesProvider';
 import { Registry } from './registry';
-import { DebugProtocol } from 'vscode-debugprotocol';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import { ObjectGripAdapter } from './objectGrip';
 
 const log = Log.create('DataBreakpointsManager');

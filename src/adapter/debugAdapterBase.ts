@@ -1,7 +1,7 @@
 import process from 'process';
 import util from 'util';
-import { DebugProtocol } from 'vscode-debugprotocol';
-import { DebugSession } from 'vscode-debugadapter';
+import { DebugProtocol } from '@vscode/debugprotocol';
+import { DebugSession } from '@vscode/debugadapter';
 import { Log } from './util/log';
 
 const log = Log.create('main');

@@ -1,5 +1,5 @@
-import { DebugClient } from 'vscode-debugadapter-testsupport';
-import { StoppedEvent } from 'vscode-debugadapter';
+import { DebugClient } from '@vscode/debugadapter-testsupport';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
 import * as util from './util';
 import * as assert from 'assert';
@@ -170,7 +170,7 @@ describe('Skipping files: The debugger', function() {
 		let stoppedEvent = await util.runCommandAndReceiveStoppedEvent(dc,
 			() => util.evaluateCloaked(dc, 'try{ testSkipFiles() }catch(e){}'));
 
-		assert.equal((<StoppedEvent>stoppedEvent).body.reason, 'breakpoint');
+		assert.equal((<DebugProtocol.StoppedEvent>stoppedEvent).body.reason, 'breakpoint');
 
 		let skipFileUrl = isWindowsPlatform() ? 
 			'file:///' + skipFilePath.replace(/\\/g, '/') :
@@ -178,6 +178,6 @@ describe('Skipping files: The debugger', function() {
 		stoppedEvent = await util.runCommandAndReceiveStoppedEvent(dc,
 			() => dc.customRequest('toggleSkippingFile', skipFileUrl));
 
-		assert.equal((<StoppedEvent>stoppedEvent).body.reason, 'breakpoint');
+		assert.equal((<DebugProtocol.StoppedEvent>stoppedEvent).body.reason, 'breakpoint');
 	})
 });
