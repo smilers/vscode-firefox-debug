@@ -92,3 +92,13 @@ export async function findAddonId(addonPath: string): Promise<string | undefined
 		throw `Couldn't parse manifest.json: ${err}`;
 	}
 }
+
+export function compareStrings(s1: string, s2: string): number {
+	if (s1 < s2) {
+		return -1;
+	} else if (s1 === s2) {
+		return 0;
+	} else {
+		return 1;
+	}
+}

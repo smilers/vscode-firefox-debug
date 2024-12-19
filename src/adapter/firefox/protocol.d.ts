@@ -328,6 +328,24 @@ declare namespace FirefoxDebugProtocol {
 		pauseOverlay: boolean;
 	}
 
+	interface GetAvailableEventBreakpointsResponse extends Response {
+		value: AvailableEventCategory[];
+	}
+
+	interface AvailableEventCategory {
+		name: string;
+		events: AvailableEvent[];
+	}
+
+	interface AvailableEvent {
+		id: string;
+		name: string;
+		type: 'simple' | 'event' | 'script';
+		eventType?: string;
+		notificationType?: string;
+		targetTypes?: ('global' | 'node' | 'websocket' | 'worker' | 'xhr')[];
+	}
+
 	interface TargetAvailableEvent extends Event {
 		target: {
 			url: string;

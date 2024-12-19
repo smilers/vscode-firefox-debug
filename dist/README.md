@@ -15,6 +15,7 @@ The following custom requests can be sent to the debug adapter:
 * `reloadAddon` : reload the WebExtension that is being debugged
 * `setPopupAutohide` : set the popup auto-hide flag (config key `ui.popup.disable_autohide`, WebExtension debugging only)
 * `togglePopupAutohide` : toggle the popup auto-hide flag
+* `setActiveEventBreakpoints` : set event listener breakpoints
 
 ### Events
 
@@ -26,6 +27,7 @@ The debug adapter sends these custom events:
 * `newSource` : sent when Firefox loaded a new source file
 * `removeSources` : sent when a thread-like actor discards its previously loaded sources, i.e. when a Tab is navigated to a new URL
 * `unknownSource` : sent when the user tries to set a breakpoint in a file that could not be mapped to a URL loaded by Firefox
+* `availableEvents` : contains the events for which event listener breakpoints can be set
 
 The event body types are defined [here](../src/common/customEvents.ts).
 The source events may be replaced by the [LoadedSourceEvent](https://microsoft.github.io/debug-adapter-protocol/specification#Events_LoadedSource) in the future.

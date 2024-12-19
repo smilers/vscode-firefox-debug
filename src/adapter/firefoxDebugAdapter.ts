@@ -494,6 +494,10 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 		return !newValue;
 	}
 
+	protected setActiveEventBreakpoints(args: string[] | undefined): Promise<void> {
+		return this.session.eventBreakpointsManager.setActiveEventBreakpoints(args ?? []);
+	}
+
 	protected async disconnect(args: DebugProtocol.DisconnectArguments): Promise<void> {
 		await this.session.stop();
 	}

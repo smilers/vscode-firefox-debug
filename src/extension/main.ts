@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import isAbsoluteUrl from 'is-absolute-url';
 import { LoadedScriptsProvider } from './loadedScripts/provider';
-import { ThreadStartedEventBody, ThreadExitedEventBody, NewSourceEventBody, RemoveSourcesEventBody, PopupAutohideEventBody } from '../common/customEvents';
+import { EventBreakpointsProvider } from './eventBreakpointsProvider';
+import { ThreadStartedEventBody, ThreadExitedEventBody, NewSourceEventBody, RemoveSourcesEventBody, PopupAutohideEventBody, AvailableEventsEventBody } from '../common/customEvents';
 import { addPathMapping, addNullPathMapping } from './addPathMapping';
 import { PopupAutohideManager } from './popupAutohideManager';
 import { DebugConfigurationProvider } from './debugConfigurationProvider';
@@ -10,12 +11,26 @@ import { createPathMappingForActiveTextEditor, createPathMappingForPath } from '
 export function activate(context: vscode.ExtensionContext) {
 
 	const loadedScriptsProvider = new LoadedScriptsProvider();
+	const eventBreakpointsProvider = new EventBreakpointsProvider();
 	const popupAutohideManager = new PopupAutohideManager(sendCustomRequest);
 	const debugConfigurationProvider = new DebugConfigurationProvider();
 
 	context.subscriptions.push(vscode.window.registerTreeDataProvider(
 		'extension.firefox.loadedScripts', loadedScriptsProvider
 	));
+
+	const eventBreakpointsView = vscode.window.createTreeView(
+		'extension.firefox.eventBreakpoints', {
+			treeDataProvider: eventBreakpointsProvider,
+			manageCheckboxStateManually: true,
+			showCollapseAll: true,
+		}
+	);
+	context.subscriptions.push(eventBreakpointsView);
+	context.subscriptions.push(eventBreakpointsView.onDidChangeCheckboxState(e => {
+		eventBreakpointsProvider.updateActiveEventBreakpoints(e);
+		sendCustomRequest('setActiveEventBreakpoints', [...eventBreakpointsProvider.activeEventBreakpoints]);
+	}));
 
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider(
 		'firefox', debugConfigurationProvider
@@ -66,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 	));
 
 	context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(
-		(event) => onCustomEvent(event, loadedScriptsProvider, popupAutohideManager)
+		(event) => onCustomEvent(event, loadedScriptsProvider, eventBreakpointsProvider, popupAutohideManager)
 	));
 
 	context.subscriptions.push(vscode.debug.onDidStartDebugSession(
@@ -79,19 +94,12 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function sendCustomRequest(command: string, args?: any): Promise<any> {
-	let debugSession = vscode.debug.activeDebugSession;
-	if (debugSession && (debugSession.type === 'firefox')) {
-		return await debugSession.customRequest(command, args);
-	} else {
-		if (debugSession) {
-			vscode.window.showErrorMessage('The active debug session is not of type "firefox"');
-		} else {
-			vscode.window.showErrorMessage('There is no active debug session');
-		}
-	}
+	await Promise.all([...activeFirefoxDebugSessions].map(
+		session => session.customRequest(command, args)
+	));
 }
 
-let activeFirefoxDebugSessions = 0;
+const activeFirefoxDebugSessions = new Set<vscode.DebugSession>();
 
 function onDidStartSession(
 	session: vscode.DebugSession,
@@ -99,7 +107,7 @@ function onDidStartSession(
 ) {
 	if (session.type === 'firefox') {
 		loadedScriptsProvider.addSession(session);
-		activeFirefoxDebugSessions++;
+		activeFirefoxDebugSessions.add(session);
 	}
 }
 
@@ -110,8 +118,8 @@ function onDidTerminateSession(
 ) {
 	if (session.type === 'firefox') {
 		loadedScriptsProvider.removeSession(session.id);
-		activeFirefoxDebugSessions--;
-		if (activeFirefoxDebugSessions === 0) {
+		activeFirefoxDebugSessions.delete(session);
+		if (activeFirefoxDebugSessions.size === 0) {
 			popupAutohideManager.disableButton();
 		}
 	}
@@ -120,6 +128,7 @@ function onDidTerminateSession(
 function onCustomEvent(
 	event: vscode.DebugSessionCustomEvent,
 	loadedScriptsProvider: LoadedScriptsProvider,
+	eventBreakpointsProvider: EventBreakpointsProvider,
 	popupAutohideManager: PopupAutohideManager
 ) {
 	if (event.session.type === 'firefox') {
@@ -148,6 +157,10 @@ function onCustomEvent(
 
 			case 'unknownSource':
 				createPathMappingForPath(event.body, event.session, loadedScriptsProvider);
+				break;
+
+			case 'availableEvents':
+				eventBreakpointsProvider.setAvailableEvents(<AvailableEventsEventBody>event.body);
 				break;
 		}
 	}

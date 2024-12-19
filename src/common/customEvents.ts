@@ -23,3 +23,15 @@ export interface RemoveSourcesEventBody {
 export interface PopupAutohideEventBody {
 	popupAutohide: boolean;
 }
+
+export interface AvailableEventCategory {
+	name: string;
+	events: AvailableEvent[];
+}
+
+export interface AvailableEvent {
+	id: string;
+	name: string;
+}
+
+export type AvailableEventsEventBody = AvailableEventCategory[];

@@ -41,6 +41,7 @@ import { SourcesManager } from './adapter/sourcesManager';
 import { ThreadConfigurationActorProxy } from './firefox/actorProxy/threadConfiguration';
 import { DescriptorAdapter } from './adapter/descriptor';
 import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
+import { EventBreakpointsManager } from './adapter/eventBreakpointsManager';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
@@ -58,6 +59,7 @@ export class FirefoxDebugSession {
 	public sourceMaps!: SourceMapsManager;
 	public readonly breakpointsManager: BreakpointsManager;
 	public readonly dataBreakpointsManager: DataBreakpointsManager;
+	public readonly eventBreakpointsManager: EventBreakpointsManager;
 	public readonly skipFilesManager: SkipFilesManager;
 	public readonly addonManager?: AddonManager;
 	private reloadWatcher?: chokidar.FSWatcher;
@@ -102,6 +104,7 @@ export class FirefoxDebugSession {
 		this.sources = new SourcesManager(this.pathMapper);
 		this.breakpointsManager = new BreakpointsManager(this);
 		this.dataBreakpointsManager = new DataBreakpointsManager(this.variablesProviders);
+		this.eventBreakpointsManager = new EventBreakpointsManager(this);
 		this.skipFilesManager = new SkipFilesManager(this.config.filesToSkip, this.sources, this.threads);
 		if (this.config.addon) {
 			this.addonManager = new AddonManager(this);

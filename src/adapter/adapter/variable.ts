@@ -4,7 +4,7 @@ import { ObjectGripAdapter } from './objectGrip';
 import { FrameAdapter } from './frame';
 import { Variable } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { accessorExpression } from '../util/misc';
+import { accessorExpression, compareStrings } from '../util/misc';
 import { renderPreview } from './preview';
 import { VariablesProvider } from './variablesProvider';
 import { GetterValueAdapter } from './getterValue';
@@ -196,17 +196,7 @@ export class VariableAdapter {
 	}
 
 	public static sortVariables(variables: VariableAdapter[]): void {
-		variables.sort((var1, var2) => VariableAdapter.compareStrings(var1.varname, var2.varname));
-	}
-
-	private static compareStrings(s1: string, s2: string): number {
-		if (s1 < s2) {
-			return -1;
-		} else if (s1 === s2) {
-			return 0;
-		} else {
-			return 1;
-		}
+		variables.sort((var1, var2) => compareStrings(var1.varname, var2.varname));
 	}
 
 	private static isFunctionGrip(grip: FirefoxDebugProtocol.Grip) {

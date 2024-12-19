@@ -38,6 +38,10 @@ export class SourceMappingThreadActorProxy extends EventEmitter implements IThre
 		return this.underlyingActorProxy.interrupt(immediately);
 	}
 
+	public async getAvailableEventBreakpoints() : Promise<FirefoxDebugProtocol.AvailableEventCategory[]> {
+		return this.underlyingActorProxy.getAvailableEventBreakpoints();
+	}
+
 	public dispose(): void {
 		this.underlyingActorProxy.dispose();
 	}

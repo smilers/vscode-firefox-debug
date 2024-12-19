@@ -9,6 +9,7 @@ export interface IThreadActorProxy {
 	resume(resumeLimitType?: 'next' | 'step' | 'finish' | 'restart', frameActorID?: string): Promise<void>;
 	interrupt(immediately?: boolean): Promise<void>;
 	fetchStackFrames(start?: number, count?: number): Promise<FirefoxDebugProtocol.Frame[]>;
+	getAvailableEventBreakpoints() : Promise<FirefoxDebugProtocol.AvailableEventCategory[]>;
 	dispose(): void;
 }
 
@@ -35,6 +36,14 @@ export class ThreadActorProxy extends BaseActorProxy implements IThreadActorProx
 	public async fetchStackFrames(start = 0, count = 1000): Promise<FirefoxDebugProtocol.Frame[]> {
 		const response: { frames: FirefoxDebugProtocol.Frame[] } = await this.sendRequest({ type: 'frames', start, count });
 		return response.frames;
+	}
+
+	public async getAvailableEventBreakpoints() : Promise<FirefoxDebugProtocol.AvailableEventCategory[]> {
+		return this.sendCachedRequest(
+			'getAvailableEventBreakpoints',
+			{ type: 'getAvailableEventBreakpoints' },
+			(response: FirefoxDebugProtocol.GetAvailableEventBreakpointsResponse) => response.value
+		);
 	}
 
 	handleEvent(event: FirefoxDebugProtocol.Event): void {

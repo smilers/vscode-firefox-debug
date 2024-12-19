@@ -21,4 +21,8 @@ export class BreakpointListActorProxy extends BaseActorProxy {
 	public async removeBreakpoint(sourceUrl: string, line: number, column: number) {
 		await this.sendRequest({ type: 'removeBreakpoint', location: { sourceUrl, line, column } });
 	}
+
+	public async setActiveEventBreakpoints(ids: string[]) {
+		await this.sendRequest({ type: 'setActiveEventBreakpoints', ids });
+	}
 }

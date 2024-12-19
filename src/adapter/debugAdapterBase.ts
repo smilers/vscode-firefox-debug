@@ -44,6 +44,7 @@ export abstract class DebugAdapterBase extends DebugSession {
 	protected abstract toggleSkippingFile(url: string): Promise<void>;
 	protected abstract setPopupAutohide(popupAutohide: boolean): Promise<void>;
 	protected abstract togglePopupAutohide(): Promise<boolean>;
+	protected abstract setActiveEventBreakpoints(args: string[]): Promise<void>;
 
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 		this.handleRequest(response, () => this.initialize(args));
@@ -152,6 +153,9 @@ export abstract class DebugAdapterBase extends DebugSession {
 
 				case 'togglePopupAutohide':
 				return await this.togglePopupAutohide();
+
+				case 'setActiveEventBreakpoints':
+				return await this.setActiveEventBreakpoints(args);
 			}
 		});
 	}
