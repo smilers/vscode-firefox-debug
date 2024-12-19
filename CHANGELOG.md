@@ -1,3 +1,8 @@
+### Version 2.12.0
+* add support for debugging without a launch configuration
+* add support for event listener breakpoints
+* fix handling of exited tabs and threads
+
 ### Version 2.11.0
 * support restarting frames
 * support skipping debugger statements
