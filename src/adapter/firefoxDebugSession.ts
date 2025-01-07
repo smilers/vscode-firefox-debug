@@ -400,7 +400,7 @@ export class FirefoxDebugSession {
 		});
 
 		watcherActor.onTargetAvailable(async ([targetActor, threadActor, consoleActor, url]) => {
-			if (isTab &&
+			if (isTab && url &&
 				(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(url)) ||
 				 this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(url)))) {
 				log.info('Not attaching to this thread');
@@ -427,6 +427,7 @@ export class FirefoxDebugSession {
 		await Promise.all([
 			watcherActor.watchTargets('frame'),
 			watcherActor.watchTargets('worker'),
+			watcherActor.supportsContentScriptTargets ? watcherActor.watchTargets('content_script') : Promise.resolve(),
 			watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']),
 			configurator.updateConfiguration(this.threadConfiguration)
 		]);
@@ -437,7 +438,7 @@ export class FirefoxDebugSession {
 		threadActor: IThreadActorProxy,
 		consoleActor: ConsoleActorProxy,
 		name: string,
-		url: string
+		url: string | undefined
 	) {
 		const threadAdapter = new ThreadAdapter(threadActor, targetActor, consoleActor, name, url, this);
 		this.threadsByTargetActorName.set(targetActor.name, threadAdapter);

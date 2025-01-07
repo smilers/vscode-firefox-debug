@@ -18,7 +18,8 @@ export class DescriptorActorProxy extends BaseActorProxy {
 		return await this.sendCachedRequest(
 			'getWatcher',
 			{ type: 'getWatcher', isServerTargetSwitchingEnabled: true, isPopupDebuggingEnabled: false },
-			(response: FirefoxDebugProtocol.GetWatcherResponse) => new WatcherActorProxy(response.actor, this.connection)
+			(response: FirefoxDebugProtocol.GetWatcherResponse) =>
+				new WatcherActorProxy(response.actor, !!response.traits.content_script, this.connection)
 		);
 	}
 

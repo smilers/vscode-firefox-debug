@@ -9,13 +9,17 @@ import { SourceMappingThreadActorProxy } from '../sourceMaps/thread';
 import { ThreadConfigurationActorProxy } from './threadConfiguration';
 
 export type ResourceType = 'console-message' | 'error-message' | 'source' | 'thread-state';
-export type TargetType = 'frame' | 'worker';
+export type TargetType = 'frame' | 'worker' | 'content_script';
 
 const log = Log.create('WatcherActorProxy');
 
 export class WatcherActorProxy extends BaseActorProxy {
 
-	constructor(name: string, connection: DebugConnection) {
+	constructor(
+		name: string,
+		public readonly supportsContentScriptTargets: boolean,
+		connection: DebugConnection
+	) {
 		super(name, connection, log);
 	}
 
@@ -43,7 +47,7 @@ export class WatcherActorProxy extends BaseActorProxy {
 		await this.sendRequest({ type: 'watchTargets', targetType });
 	}
 
-	public onTargetAvailable(cb: (target: [TargetActorProxy, IThreadActorProxy, ConsoleActorProxy, string]) => void) {
+	public onTargetAvailable(cb: (target: [TargetActorProxy, IThreadActorProxy, ConsoleActorProxy, string | undefined]) => void) {
 		this.on('targetAvailable', cb);
 	}
 

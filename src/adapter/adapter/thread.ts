@@ -64,7 +64,7 @@ export class ThreadAdapter extends EventEmitter {
 		public readonly targetActor: TargetActorProxy,
 		private readonly consoleActor: ConsoleActorProxy,
 		public readonly name: string,
-		public readonly url: string,
+		public readonly url: string | undefined,
 		public readonly debugSession: FirefoxDebugSession
 	) {
 		super();

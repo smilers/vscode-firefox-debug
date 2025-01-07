@@ -301,7 +301,9 @@ declare namespace FirefoxDebugProtocol {
 
 	interface GetWatcherResponse extends Response {
 		actor: string;
-		traits: {};
+		traits: {
+			content_script?: boolean;
+		};
 	}
 
 	interface GetBreakpointListResponse extends Response {
@@ -348,7 +350,7 @@ declare namespace FirefoxDebugProtocol {
 
 	interface TargetAvailableEvent extends Event {
 		target: {
-			url: string;
+			url?: string;
 			actor: string;
 			consoleActor: string;
 			threadActor: string;
