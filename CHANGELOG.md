@@ -1,3 +1,6 @@
+### Version 2.12.1
+* fix debugging of web extension content scripts in Firefox 135
+
 ### Version 2.12.0
 * add support for debugging without a launch configuration
 * add support for event listener breakpoints
