@@ -657,6 +657,16 @@ export class FirefoxDebugSession {
 
 			outputEvent = new OutputEvent(msg + '\n', category);
 
+		} else if (message.styles && message.arguments.every(argument => typeof argument !== 'object')) {
+
+			let msg = message.arguments.map(argument => String(argument)).join('');
+			if (this.config.showConsoleCallLocation) {
+				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
+				msg += ` (${filename}:${message.lineNumber}:${message.columnNumber})`;
+			}
+
+			outputEvent = new OutputEvent(msg + '\n', category);
+
 		} else {
 
 			let args = message.arguments.map((grip, index) => {
