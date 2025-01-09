@@ -7,8 +7,11 @@ const log = Log.create('TargetActorProxy');
 
 export class TargetActorProxy extends BaseActorProxy {
 
-	constructor(name: string, connection: DebugConnection) {
-		super(name, connection, log);
+	constructor(
+		public readonly target: FirefoxDebugProtocol.TargetAvailableEvent['target'],
+		connection: DebugConnection
+	) {
+		super(target.actor, connection, log);
 	}
 
 	public onConsoleMessages(cb: (consoleMessages: FirefoxDebugProtocol.ConsoleMessage[]) => void) {

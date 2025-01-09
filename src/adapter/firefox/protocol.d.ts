@@ -354,6 +354,8 @@ declare namespace FirefoxDebugProtocol {
 			actor: string;
 			consoleActor: string;
 			threadActor: string;
+			isTopLevelTarget?: boolean;
+			isFallbackExtensionDocument?: boolean;
 		};
 	}
 

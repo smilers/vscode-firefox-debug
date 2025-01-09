@@ -57,7 +57,7 @@ export class WatcherActorProxy extends BaseActorProxy {
 
 	handleEvent(event: FirefoxDebugProtocol.TargetAvailableEvent | FirefoxDebugProtocol.TargetDestroyedEvent): void {
 		if (event.type === 'target-available-form') {
-			const targetActorProxy = new TargetActorProxy(event.target.actor, this.connection);
+			const targetActorProxy = new TargetActorProxy(event.target, this.connection);
 			const threadActorProxy = new ThreadActorProxy(event.target.threadActor, this.connection);
 			const sourcemappingThreadActorProxy = new SourceMappingThreadActorProxy(threadActorProxy, this.connection);
 			const consoleActorProxy = new ConsoleActorProxy(event.target.consoleActor, this.connection);

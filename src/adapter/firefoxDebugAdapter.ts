@@ -44,6 +44,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 			supportsDataBreakpoints: true,
 			supportsBreakpointLocationsRequest: true,
 			supportsRestartFrame: true,
+			supportsANSIStyling: true,
 			exceptionBreakpointFilters: [
 				{
 					filter: 'all',

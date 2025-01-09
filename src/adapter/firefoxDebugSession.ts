@@ -418,6 +418,14 @@ export class FirefoxDebugSession {
 				return;
 			}
 	
+			const target = threadAdapter.targetActor.target;
+			if (target.isTopLevelTarget &&
+				!target.isFallbackExtensionDocument &&
+				this.config.clearConsoleOnReload
+			) {
+				this.sendEvent(new OutputEvent('\x1b[2J'));
+			}
+	
 			this.sendThreadExitedEvent(threadAdapter);
 			this.threadsByTargetActorName.delete(targetActorName);
 			adapter.threads.delete(threadAdapter);
