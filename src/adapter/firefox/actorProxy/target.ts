@@ -7,6 +7,8 @@ const log = Log.create('TargetActorProxy');
 
 export class TargetActorProxy extends BaseActorProxy {
 
+	public destroyed = false;
+
 	constructor(
 		public readonly target: FirefoxDebugProtocol.TargetAvailableEvent['target'],
 		connection: DebugConnection
@@ -32,7 +34,9 @@ export class TargetActorProxy extends BaseActorProxy {
 					allMappedSources.push(underlyingSource);
 				}
 			}
-			cb(allMappedSources);
+			if (!this.destroyed) {
+				cb(allMappedSources);
+			}
 		});
 	}
 

@@ -148,6 +148,7 @@ export class FirefoxDebugSession {
 
 				if (this.reloadTabs) {
 					await tabDescriptorActor.reload();
+					await delay(200);
 				}
 
 				await this.attachDescriptor(tabDescriptorActor);
@@ -426,7 +427,9 @@ export class FirefoxDebugSession {
 			) {
 				this.sendEvent(new OutputEvent('\x1b[2J'));
 			}
-	
+
+			threadAdapter.targetActor.destroyed = true;
+
 			this.sendThreadExitedEvent(threadAdapter);
 			this.threadsByTargetActorName.delete(targetActorName);
 			adapter.threads.delete(threadAdapter);
