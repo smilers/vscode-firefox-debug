@@ -11,6 +11,7 @@ import { SourceActorProxy } from '../actorProxy/source';
 import { SourceMappingSourceActorProxy } from './source';
 import { SourceMappingInfo } from './info';
 import { UrlLocation } from '../../location';
+import { SourcesManager } from '../../adapter/sourcesManager';
 
 let log = Log.create('SourceMapsManager');
 
@@ -21,6 +22,7 @@ export class SourceMapsManager {
 
 	public constructor(
 		private readonly pathMapper: PathMapper,
+		private readonly sources: SourcesManager,
 		private readonly connection: DebugConnection
 	) {}
 
@@ -79,6 +81,20 @@ export class SourceMapsManager {
 		column?: number
 	): Promise<UrlLocation | undefined> {
 
+		if (generatedUrl === 'debugger eval code') {
+			return undefined;
+		}
+
+		// sometimes Firefox sends a location shortly before sending information about
+		// the corresponding source, so we try to wait for it
+		const adapter = await Promise.race([
+			this.sources.getAdapterForUrl(generatedUrl),
+			new Promise(resolve => setTimeout(resolve, 200))
+		]);
+		if (!adapter) {
+			return undefined;
+		}
+
 		for (const infoPromise of this.sourceMappingInfos.values()) {
 			const info = await infoPromise;
 			if (generatedUrl === info.underlyingSource.url) {
@@ -100,7 +116,7 @@ export class SourceMapsManager {
 
 	public async applySourceMapToFrame(frame: FirefoxDebugProtocol.Frame): Promise<void> {
 
-		const sourceMappingInfo = await this.connection.sourceMaps.getSourceMappingInfo(frame.where.actor);
+		const sourceMappingInfo = await this.getSourceMappingInfo(frame.where.actor);
 		const source = sourceMappingInfo.underlyingSource.source;
 
 		if (source && sourceMappingInfo && sourceMappingInfo.hasSourceMap && frame.where.line) {

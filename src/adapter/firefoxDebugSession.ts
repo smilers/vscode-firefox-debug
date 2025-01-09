@@ -139,7 +139,7 @@ export class FirefoxDebugSession {
 					this.sendEvent(new TerminatedEvent());
 				});
 			});
-			this.firefoxDebugConnection = new DebugConnection(this.pathMapper, socket);
+			this.firefoxDebugConnection = new DebugConnection(this.pathMapper, this.sources, socket);
 			this.sourceMaps = this.firefoxDebugConnection.sourceMaps;
 			let rootActor = this.firefoxDebugConnection.rootActor;
 
@@ -710,7 +710,7 @@ export class FirefoxDebugSession {
 	) {
 		const originalLocation = await this.sourceMaps.findOriginalLocation(url, line, column);
 		if (originalLocation?.url) {
-			const sourceAdapter = this.sources.getAdapterForUrl(originalLocation.url);
+			const sourceAdapter = await this.sources.getAdapterForUrl(originalLocation.url);
 			if (sourceAdapter) {
 				outputEvent.body.source = sourceAdapter.source;
 				outputEvent.body.line = originalLocation.line;

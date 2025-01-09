@@ -5,6 +5,7 @@ import { ActorProxy } from './actorProxy/interface';
 import { RootActorProxy } from './actorProxy/root';
 import { PathMapper } from '../util/pathMapper';
 import { SourceMapsManager } from './sourceMaps/manager';
+import { SourcesManager } from '../adapter/sourcesManager';
 
 let log = Log.create('DebugConnection');
 
@@ -18,10 +19,10 @@ export class DebugConnection {
 	public readonly sourceMaps: SourceMapsManager;
 	public readonly rootActor: RootActorProxy;
 
-	constructor(pathMapper: PathMapper, socket: Socket) {
+	constructor(pathMapper: PathMapper, sources: SourcesManager, socket: Socket) {
 
 		this.actors = new Map<string, ActorProxy>();
-		this.sourceMaps = new SourceMapsManager(pathMapper, this);
+		this.sourceMaps = new SourceMapsManager(pathMapper, sources, this);
 		this.rootActor = new RootActorProxy(this);
 		this.transport = new DebugProtocolTransport(socket);
 

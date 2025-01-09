@@ -14,14 +14,14 @@ export class SourcesManager {
 	private readonly adapters = new Registry<SourceAdapter>();
 	private readonly adaptersByPath = new DeferredMap<string, SourceAdapter>();
 	private readonly adaptersByActor = new DeferredMap<string, SourceAdapter>();
-	private readonly adaptersByUrl = new Map<string, SourceAdapter>();
+	private readonly adaptersByUrl = new DeferredMap<string, SourceAdapter>();
 
 	constructor(private readonly pathMapper: PathMapper) {}
 
 	public addActor(actor: ISourceActorProxy) {
 		log.debug(`Adding source ${actor.name}`);
 
-		let adapter: SourceAdapter | undefined = actor.url ? this.adaptersByUrl.get(actor.url) : undefined;
+		let adapter: SourceAdapter | undefined = actor.url ? this.adaptersByUrl.getExisting(actor.url) : undefined;
 		const path = this.pathMapper.convertFirefoxSourceToPath(actor.source);
 		const normalizedPath = path ? normalizePath(path) : undefined;
 
