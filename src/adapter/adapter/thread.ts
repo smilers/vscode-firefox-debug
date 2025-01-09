@@ -3,22 +3,16 @@ import { IThreadActorProxy } from '../firefox/actorProxy/thread';
 import { ConsoleActorProxy } from '../firefox/actorProxy/console';
 import { FrameAdapter } from './frame';
 import { ScopeAdapter } from './scope';
-import { SourceAdapter } from './source';
 import { ObjectGripAdapter } from './objectGrip';
 import { VariablesProvider } from './variablesProvider';
 import { VariableAdapter } from './variable';
 import { Variable } from '@vscode/debugadapter';
 import { Log } from '../util/log';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
-import { Location } from '../location';
 import { TargetActorProxy } from '../firefox/actorProxy/target';
 import { ISourceActorProxy } from '../firefox/actorProxy/source';
 
 let log = Log.create('ThreadAdapter');
-
-export interface SourceLocation extends Location {
-	source: SourceAdapter;
-}
 
 /**
  * Adapter class for a thread
@@ -98,27 +92,6 @@ export class ThreadAdapter extends EventEmitter {
 			this.threadLifetimeObjects.push(objectGripAdapter);
 			objectGripAdapter.threadLifetime = true;
 		}
-	}
-
-	public async findOriginalSourceLocation(
-		generatedUrl: string,
-		line: number,
-		column?: number
-	): Promise<SourceLocation | undefined> {
-
-		const originalLocation = await this.debugSession.sourceMaps.findOriginalLocation(generatedUrl, line, column);
-		if (originalLocation?.url) {
-			const sourceAdapter = this.debugSession.sources.getAdapterForUrl(originalLocation.url);
-			if (sourceAdapter) {
-				return {
-					source: sourceAdapter,
-					line: originalLocation.line,
-					column: originalLocation.column
-				};
-			}
-		}
-
-		return undefined;
 	}
 
 	public interrupt(): Promise<void> {

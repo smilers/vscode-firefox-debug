@@ -42,6 +42,7 @@ import { ThreadConfigurationActorProxy } from './firefox/actorProxy/threadConfig
 import { DescriptorAdapter } from './adapter/descriptor';
 import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
 import { EventBreakpointsManager } from './adapter/eventBreakpointsManager';
+import { Location } from './location';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
@@ -707,15 +708,13 @@ export class FirefoxDebugSession {
 		line: number,
 		column: number
 	) {
-
-		for (let [, thread] of this.threads) {
-			let originalSourceLocation = await thread.findOriginalSourceLocation(url, line, column);
-			if (originalSourceLocation) {
-				const sourceAdapter = originalSourceLocation.source;
+		const originalLocation = await this.sourceMaps.findOriginalLocation(url, line, column);
+		if (originalLocation?.url) {
+			const sourceAdapter = this.sources.getAdapterForUrl(originalLocation.url);
+			if (sourceAdapter) {
 				outputEvent.body.source = sourceAdapter.source;
-				outputEvent.body.line = originalSourceLocation.line;
-				outputEvent.body.column = originalSourceLocation.column;
-				return;
+				outputEvent.body.line = originalLocation.line;
+				outputEvent.body.column = originalLocation.column;
 			}
 		}
 	}
