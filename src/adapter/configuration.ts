@@ -30,6 +30,7 @@ export interface ParsedConfiguration {
 	launch?: ParsedLaunchConfiguration;
 	addon?: ParsedAddonConfiguration;
 	pathMappings: PathMappings;
+	pathMappingIndex: string;
 	filesToSkip: RegExp[];
 	reloadOnChange?: NormalizedReloadConfiguration,
 	tabFilter: ParsedTabFilterConfiguration,
@@ -194,6 +195,8 @@ export async function parseConfiguration(
 
 	pathMappings.push({ url: (isWindowsPlatform() ? 'file:///' : 'file://'), path: ''});
 
+	const pathMappingIndex = config.pathMappingIndex ?? 'index.html';
+
 	let filesToSkip = parseSkipFilesConfiguration(config);
 
 	let reloadOnChange = parseReloadConfiguration(config.reloadOnChange);
@@ -212,7 +215,7 @@ export async function parseConfiguration(
 	const enableCRAWorkaround = !!config.enableCRAWorkaround;
 
 	return {
-		attach, launch, addon, pathMappings, filesToSkip, reloadOnChange, tabFilter, clearConsoleOnReload,
+		attach, launch, addon, pathMappings, pathMappingIndex, filesToSkip, reloadOnChange, tabFilter, clearConsoleOnReload,
 		showConsoleCallLocation, liftAccessorsFromPrototypes, suggestPathMappingWizard, terminate,
 		enableCRAWorkaround
 	};

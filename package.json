@@ -514,6 +514,11 @@
                   }
                 }
               },
+              "pathMappingIndex": {
+                "type": "string",
+                "description": "The name of the directory index file configured in the webserver",
+                "default": "index.html"
+              },
               "skipFiles": {
                 "type": "array",
                 "description": "An array of glob patterns to skip when debugging",
@@ -782,6 +787,11 @@
                     }
                   }
                 }
+              },
+              "pathMappingIndex": {
+                "type": "string",
+                "description": "The name of the directory index file configured in the webserver",
+                "default": "index.html"
               },
               "skipFiles": {
                 "type": "array",

@@ -101,7 +101,7 @@ export class FirefoxDebugSession {
 		public readonly config: ParsedConfiguration,
 		public readonly sendEvent: (ev: DebugProtocol.Event) => void
 	) {
-		this.pathMapper = new PathMapper(this.config.pathMappings, this.config.addon);
+		this.pathMapper = new PathMapper(this.config.pathMappings, this.config.pathMappingIndex, this.config.addon);
 		this.sources = new SourcesManager(this.pathMapper);
 		this.breakpointsManager = new BreakpointsManager(this);
 		this.dataBreakpointsManager = new DataBreakpointsManager(this.variablesProviders);

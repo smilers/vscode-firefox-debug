@@ -19,6 +19,7 @@ export class PathMapper {
 
 	constructor(
 		private readonly pathMappings: PathMappings,
+		private readonly pathMappingIndex: string,
 		private readonly addonConfig?: ParsedAddonConfiguration
 	) {}
 
@@ -82,6 +83,10 @@ export class PathMapper {
 	}
 
 	public convertFirefoxUrlToPath(url: string): string | undefined {
+
+		if (url.endsWith('/')) {
+			url += this.pathMappingIndex;
+		}
 
 		for (var i = 0; i < this.pathMappings.length; i++) {
 

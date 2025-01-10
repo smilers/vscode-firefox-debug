@@ -39,6 +39,7 @@ export interface CommonConfiguration {
 	tabFilter?: TabFilterConfiguration;
 	clearConsoleOnReload?: boolean;
 	pathMappings?: { url: string, path: string | null }[];
+	pathMappingIndex?: string;
 	skipFiles?: string[];
 	showConsoleCallLocation?: boolean;
 	log?: LogConfiguration;
