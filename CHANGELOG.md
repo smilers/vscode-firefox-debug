@@ -1,3 +1,10 @@
+### Version 2.13.0
+* fix `clearConsoleOnReload`
+* fix output of styled console messages
+* fix showing the locations of early console messages
+* fix breakpoint issues with `reloadOnAttach`
+* add pathMappingIndex configuration property
+
 ### Version 2.12.1
 * fix debugging of web extension content scripts in Firefox 135
 
