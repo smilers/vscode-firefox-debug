@@ -305,28 +305,6 @@ describe('The configuration parser', function() {
 		assert.equal(parsedConfiguration.attach!.reloadTabs, true);
 	});
 
-	it('should not allow "reAttach" to be false while "keepProfileChanges" is true on MacOS', async function() {
-
-		if (os.platform() !== 'darwin') {
-			this.skip();
-			return;
-		}
-
-		try {
-			await parseConfiguration({
-				request: 'launch',
-				file: '/home/user/project/index.html',
-				reAttach: false,
-				profileDir: path.join(os.tmpdir(), 'dummy'),
-				keepProfileChanges: true
-			});
-		} catch {
-			return;
-		}
-
-		throw new Error('This configuration should have been rejected');
-	});
-
 	it('should create a corresponding NormalizedReloadConfiguration if "reloadOnChange" is set to a string', async function() {
 
 		let parsedConfiguration = await parseConfiguration({

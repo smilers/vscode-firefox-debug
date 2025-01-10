@@ -148,7 +148,10 @@ export async function parseConfiguration(
 			if (!config.reAttach) {
 				detached = false;
 				if (config.keepProfileChanges) {
-					throw 'On MacOS, "keepProfileChanges" is only allowed with "reAttach" because your profile may get damaged otherwise';
+					// on MacOS we need to terminate the browser using `process.kill()`, which may
+					// be interpreted by Firefox as a crash, so we add this option to prevent
+					// starting into safe mode
+					preferences['toolkit.startup.max_resumed_crashes'] = -1;
 				}
 			}
 		}
