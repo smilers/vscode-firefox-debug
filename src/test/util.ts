@@ -20,17 +20,7 @@ export async function initDebugClient(
 		file: path.join(testDataPath, 'web/index.html')
 	};
 
-	if (process.env['FIREFOX_EXECUTABLE']) {
-		launchArgs.firefoxExecutable = process.env['FIREFOX_EXECUTABLE'];
-	}
-
-	if (process.env['FIREFOX_PROFILE']) {
-		launchArgs.profile = process.env['FIREFOX_PROFILE'];
-	}
-
-	if (process.env['HEADLESS'] === "true") {
-		launchArgs.firefoxArgs = ["-headless"];
-	}
+	processEnvironmentVariables(launchArgs);
 
 	if (extraLaunchArgs !== undefined) {
 		launchArgs = Object.assign(launchArgs, extraLaunchArgs);
@@ -77,17 +67,7 @@ export async function initDebugClientForAddon(
 		dcArgs.file = path.join(testDataPath, `webExtension/index.html`);
 	}
 
-	if (process.env['FIREFOX_EXECUTABLE']) {
-		dcArgs.firefoxExecutable = process.env['FIREFOX_EXECUTABLE'];
-	}
-
-	if (process.env['FIREFOX_PROFILE']) {
-		dcArgs.profile = process.env['FIREFOX_PROFILE'];
-	}
-
-	if (process.env['HEADLESS'] === "true") {
-		dcArgs.firefoxArgs = ["-headless"];
-	}
+	processEnvironmentVariables(dcArgs);
 
 	let dc = new DebugClient('node', './dist/adapter.bundle.js', 'firefox');
 
@@ -111,6 +91,28 @@ export async function initDebugClientForAddon(
 	}
 
 	return dc;
+}
+
+function processEnvironmentVariables(launchArgs: LaunchConfiguration) {
+	if (process.env['FIREFOX_EXECUTABLE']) {
+		launchArgs.firefoxExecutable = process.env['FIREFOX_EXECUTABLE'];
+	}
+
+	if (process.env['FIREFOX_PROFILE']) {
+		launchArgs.profile = process.env['FIREFOX_PROFILE'];
+	}
+
+	if (process.env['FIREFOX_PROFILE_DIR']) {
+		launchArgs.profileDir = process.env['FIREFOX_PROFILE_DIR'];
+	}
+
+	if (process.env['KEEP_PROFILE_CHANGES'] === 'true') {
+		launchArgs.keepProfileChanges = true;
+	}
+
+	if (process.env['HEADLESS'] === 'true') {
+		launchArgs.firefoxArgs = ['-headless'];
+	}
 }
 
 async function waitForUnoccupiedPort(port: number, timeout: number) {

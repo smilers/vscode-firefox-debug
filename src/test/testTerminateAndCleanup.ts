@@ -14,6 +14,11 @@ describe('Terminate and cleanup: The debugger', function() {
 
 	it('should eventually delete the temporary profile after terminating Firefox', async function() {
 
+		if (process.env['KEEP_PROFILE_CHANGES'] === 'true') {
+			this.skip();
+			return;
+		}
+
 		const tmpDir = path.join(os.tmpdir(), `vscode-firefox-debug-test-${uuid.v4()}`);
 		const dc = await util.initDebugClient(TESTDATA_PATH, true, { tmpDir });
 
