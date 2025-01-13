@@ -1,3 +1,6 @@
+### Version 2.14.0
+* improve how console messages are rendered
+
 ### Version 2.13.0
 * fix `clearConsoleOnReload`
 * fix output of styled console messages
