@@ -180,7 +180,7 @@ function renderGripOrNull(gripOrNull: FirefoxDebugProtocol.Grip | null): string 
 	}
 }
 
-function renderGrip(grip: FirefoxDebugProtocol.Grip): string {
+export function renderGrip(grip: FirefoxDebugProtocol.Grip, quoteStrings = true): string {
 
 	if ((typeof grip === 'boolean') || (typeof grip === 'number')) {
 
@@ -188,11 +188,14 @@ function renderGrip(grip: FirefoxDebugProtocol.Grip): string {
 
 	} else if (typeof grip === 'string') {
 
+		let rendered: string;
 		if (grip.length > maxStringChars) {
-			return `"${grip.substr(0, maxStringChars)}\u2026"`;
+			rendered = `${grip.substr(0, maxStringChars)}\u2026`;
 		} else {
-			return `"${grip}"`;
+			rendered = grip;
 		}
+
+		return quoteStrings ? `"${rendered}"` : rendered;
 
 	} else {
 

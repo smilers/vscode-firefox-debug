@@ -10,15 +10,36 @@ export class ConsoleAPICallAdapter implements VariablesProvider {
 	public readonly variablesProviderId: number;
 	public readonly referenceExpression = undefined;
 	public readonly referenceFrame = undefined;
+	private readonly argsAdapter: VariableAdapter;
 
 	public constructor(
-		private readonly variables: VariableAdapter[],
+		args: VariableAdapter[],
+		preview: string,
+		public readonly threadAdapter: ThreadAdapter
+	) {
+		this.variablesProviderId = threadAdapter.debugSession.variablesProviders.register(this);
+		this.argsAdapter = VariableAdapter.fromArgumentList(args, preview, threadAdapter);
+	}
+
+	public getVariables(): Promise<VariableAdapter[]> {
+		return Promise.resolve(this.argsAdapter ? [this.argsAdapter] : []);
+	}
+}
+
+export class ArgumentListAdapter implements VariablesProvider {
+
+	public readonly variablesProviderId: number;
+	public readonly referenceExpression = undefined;
+	public readonly referenceFrame = undefined;
+
+	public constructor(
+		private readonly args: VariableAdapter[],
 		public readonly threadAdapter: ThreadAdapter
 	) {
 		this.variablesProviderId = threadAdapter.debugSession.variablesProviders.register(this);
 	}
 
 	public getVariables(): Promise<VariableAdapter[]> {
-		return Promise.resolve(this.variables);
+		return Promise.resolve(this.args);
 	}
 }

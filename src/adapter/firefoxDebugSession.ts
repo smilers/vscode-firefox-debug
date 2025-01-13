@@ -42,7 +42,7 @@ import { ThreadConfigurationActorProxy } from './firefox/actorProxy/threadConfig
 import { DescriptorAdapter } from './adapter/descriptor';
 import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
 import { EventBreakpointsManager } from './adapter/eventBreakpointsManager';
-import { Location } from './location';
+import { renderGrip } from './adapter/preview';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
@@ -620,84 +620,42 @@ export class FirefoxDebugSession {
 		let outputEvent: DebugProtocol.OutputEvent;
 
 		if (message.level === 'time' && message.timer?.error === "timerAlreadyExists") {
+
 			outputEvent = new OutputEvent(`Timer “${message.timer.name}” already exists`, 'console');
+
 		} else if (
 			(message.level === 'timeLog' || message.level === 'timeEnd') &&
 			message.timer?.error === "timerDoesntExist"
 		) {
+
 			outputEvent = new OutputEvent(`Timer “${message.timer.name}” doesn't exist`, 'console');
-		} else if (message.level === 'timeLog' && message.timer?.duration !== undefined) {
-			const args = message.arguments.map((grip, index) => {
-				// The first argument is the timer name
-				if (index === 0) {
-					return new VariableAdapter(
-						String(index),
-						undefined,
-						undefined,
-						`${message.timer.name}: ${message.timer.duration}ms`,
-						threadAdapter
-					);
-				}
-
-				if (typeof grip !== 'object') {
-					return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
-				}
-
-				return VariableAdapter.fromGrip(String(index), undefined, undefined, grip, true, threadAdapter);
-			});
-
-			let { variablesProviderId } = new ConsoleAPICallAdapter(args, threadAdapter);
-			outputEvent = new OutputEvent('', 'stdout');
-			outputEvent.body.variablesReference = variablesProviderId;
-		} else if (message.level === 'timeEnd' && message.timer?.duration !== undefined) {
-			outputEvent = new OutputEvent(`${message.timer.name}: ${message.timer.duration}ms - timer ended`, 'stdout');
-		} else if ((message.arguments.length === 1) && (typeof message.arguments[0] !== 'object')) {
-
-			let msg = String(message.arguments[0]);
-			if (this.config.showConsoleCallLocation) {
-				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
-				msg += ` (${filename}:${message.lineNumber}:${message.columnNumber})`;
-			}
-
-			outputEvent = new OutputEvent(msg + '\n', category);
-
-		} else if (message.styles && message.arguments.every(argument => typeof argument !== 'object')) {
-
-			let msg = message.arguments.map(argument => String(argument)).join('');
-			if (this.config.showConsoleCallLocation) {
-				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
-				msg += ` (${filename}:${message.lineNumber}:${message.columnNumber})`;
-			}
-
-			outputEvent = new OutputEvent(msg + '\n', category);
 
 		} else {
 
-			let args = message.arguments.map((grip, index) => {
-				if (typeof grip !== 'object') {
-					return new VariableAdapter(String(index), undefined, undefined, String(grip), threadAdapter);
-				} else {
-					return VariableAdapter.fromGrip(String(index), undefined, undefined, grip, true, threadAdapter);
+			const args: VariableAdapter[] = [];
+			const previews = message.arguments.map((grip, index) => {
+				if (message.timer && index === 0) {
+					// The first argument is the timer name
+					const renderedTimer = `${message.timer.name}: ${message.timer.duration}ms`;
+					return message.level === 'timeEnd' ? `${renderedTimer} - timer ended` : renderedTimer;
 				}
+				if (typeof grip === 'object' && grip.type === 'object') {
+					args.push(VariableAdapter.fromGrip(`arg${index}`, undefined, undefined, grip, true, threadAdapter));
+				}
+				return renderGrip(grip, false);
 			});
-
-			if ((message.level === 'logPoint') && (args[args.length - 1].displayValue === '')) {
-				args.pop();
-			}
+			let msg = previews.join(' ');
 
 			if (this.config.showConsoleCallLocation) {
-				let filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
-				let locationVar = new VariableAdapter(
-					'location', undefined, undefined,
-					`(${filename}:${message.lineNumber}:${message.columnNumber})`,
-					threadAdapter);
-				args.push(locationVar);
+				const filename = this.pathMapper.convertFirefoxUrlToPath(message.filename);
+				msg += ` (${filename}:${message.lineNumber}:${message.columnNumber})`;
 			}
 
-			let argsAdapter = new ConsoleAPICallAdapter(args, threadAdapter);
-
-			outputEvent = new OutputEvent('', category);
-			outputEvent.body.variablesReference = argsAdapter.variablesProviderId;
+			outputEvent = new OutputEvent(`${msg}\n`, category);
+			if (args.length > 0) {
+				const argsAdapter = new ConsoleAPICallAdapter(args, msg, threadAdapter);
+				outputEvent.body.variablesReference = argsAdapter.variablesProviderId;
+			}
 		}
 
 		await this.addLocation(outputEvent, message.filename, message.lineNumber, message.columnNumber);

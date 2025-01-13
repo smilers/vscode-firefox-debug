@@ -52,13 +52,7 @@ describe('Debug console: The debugger', function() {
 		outputEvent = <DebugProtocol.OutputEvent> await dc.waitForEvent('output');
 
 		assert.equal(outputEvent.body.category, 'stdout');
-		assert.notEqual(outputEvent.body.variablesReference, undefined);
-
-		let vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
-
-		assert.equal(vars.body.variables.length, 2);
-		assert.equal(util.findVariable(vars.body.variables, '0').value, 'foo');
-		assert.equal(util.findVariable(vars.body.variables, '1').value, '2');
+		assert.equal(outputEvent.body.output.trim(), 'foo 2');
 
 		util.evaluate(dc, 'console.log({"foo":"bar"})');
 		outputEvent = <DebugProtocol.OutputEvent> await dc.waitForEvent('output');
@@ -66,9 +60,15 @@ describe('Debug console: The debugger', function() {
 		assert.equal(outputEvent.body.category, 'stdout');
 		assert.notEqual(outputEvent.body.variablesReference, undefined);
 
-		vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
+		let vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
 
 		assert.equal(vars.body.variables.length, 1);
+		assert.equal(vars.body.variables[0].name, 'arguments');
+
+		vars = await dc.variablesRequest({ variablesReference: vars.body.variables[0].variablesReference });
+
+		assert.equal(vars.body.variables.length, 1);
+		assert.equal(vars.body.variables[0].name, 'arg0');
 
 		vars = await dc.variablesRequest({ variablesReference: vars.body.variables[0].variablesReference });
 
@@ -124,22 +124,16 @@ describe('Debug console: The debugger', function() {
 		util.evaluate(dc, 'log("foo","bar")');
 		outputEvent = <DebugProtocol.OutputEvent> await dc.waitForEvent('output');
 
-		assert.notEqual(outputEvent.body.variablesReference, undefined);
-
-		let vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
-
-		assert.equal(vars.body.variables.length, 3);
-		assert.ok(util.findVariable(vars.body.variables, 'location').value.endsWith(expectedMessageEnding));
+		assert.equal(outputEvent.body.output.substr(0, 9), 'foo bar (');
+		assert.ok(outputEvent.body.output.endsWith(expectedMessageEnding + '\n'));
 
 		util.evaluate(dc, 'log({"foo":"bar"})');
 		outputEvent = <DebugProtocol.OutputEvent> await dc.waitForEvent('output');
 
 		assert.notEqual(outputEvent.body.variablesReference, undefined);
 
-		vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
-
-		assert.equal(vars.body.variables.length, 2);
-		assert.ok(util.findVariable(vars.body.variables, 'location').value.endsWith(expectedMessageEnding));
+		assert.equal(outputEvent.body.output.substr(0, 14), '{foo: "bar"} (');
+		assert.ok(outputEvent.body.output.endsWith(expectedMessageEnding + '\n'));
 	});
 
 	it('should offer code completions in the debugging console', async function() {

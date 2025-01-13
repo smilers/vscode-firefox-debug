@@ -194,15 +194,17 @@ describe('Hitting breakpoints: The debugger', function() {
 
 		util.evaluate(dc, 'factorial(1)');
 		const outputEvent = await dc.waitForEvent('output') as DebugProtocol.OutputEvent;
+		assert.equal(outputEvent.body.output.trim(), 'obj is  {x: 17, y: Object}');
 
 		assert.notEqual(outputEvent.body.variablesReference, undefined);
-		let vars = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
+		const args = await dc.variablesRequest({ variablesReference: outputEvent.body.variablesReference! });
 
-		assert.equal(vars.body.variables.length, 2);
-		assert.equal(util.findVariable(vars.body.variables, '0').value, 'obj is ');
-		const objVar = util.findVariable(vars.body.variables, '1');
-		assert.equal(objVar.value, '{x: 17, y: Object}');
+		assert.equal(args.body.variables.length, 1);
+		const argsVar = util.findVariable(args.body.variables, 'arguments');
+		assert.equal(argsVar.value.trim(), 'obj is  {x: 17, y: Object}');
 
+		let vars = await dc.variablesRequest({ variablesReference: argsVar.variablesReference });
+		const objVar = util.findVariable(vars.body.variables, 'arg1');
 		assert.notEqual(objVar.variablesReference, undefined);
 		vars = await dc.variablesRequest({ variablesReference: objVar.variablesReference! });
 

@@ -8,6 +8,7 @@ import { accessorExpression, compareStrings } from '../util/misc';
 import { renderPreview } from './preview';
 import { VariablesProvider } from './variablesProvider';
 import { GetterValueAdapter } from './getterValue';
+import { ArgumentListAdapter } from './consoleAPICall';
 
 let log = Log.create('VariableAdapter');
 
@@ -193,6 +194,16 @@ export class VariableAdapter {
 		return VariableAdapter.fromGrip(
 			varname, parentReferenceExpression, referenceFrame,
 			safeGetterValueDescriptor.getterValue, threadLifetime, threadAdapter);
+	}
+
+	public static fromArgumentList(
+		args: VariableAdapter[],
+		preview: string,
+		threadAdapter: ThreadAdapter
+	): VariableAdapter {
+		const variableAdapter = new VariableAdapter('arguments', undefined, undefined, preview, threadAdapter);
+		variableAdapter._variablesProvider = new ArgumentListAdapter(args, threadAdapter);
+		return variableAdapter;
 	}
 
 	public static sortVariables(variables: VariableAdapter[]): void {

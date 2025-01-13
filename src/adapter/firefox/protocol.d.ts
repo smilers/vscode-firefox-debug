@@ -226,7 +226,11 @@ declare namespace FirefoxDebugProtocol {
 		lineNumber: number;
 		columnNumber: number;
 		timeStamp: number;
-		timer: any; //?
+		timer: {
+			name: string;
+			duration: number;
+			error?: string;
+		};
 		styles?: any[];
 		// sourceId, innerWindowID
 	}
