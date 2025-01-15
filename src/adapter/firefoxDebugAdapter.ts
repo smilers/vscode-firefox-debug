@@ -203,7 +203,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 			throw new Error('Failed sourceRequest: the requested source can\'t be found');
 		}
 
-		let sourceGrip = await sourceAdapter.actors[0].fetchSource();
+		let sourceGrip = await sourceAdapter.fetchSource();
 
 		if (typeof sourceGrip === 'string') {
 

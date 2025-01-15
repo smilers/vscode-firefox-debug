@@ -38,14 +38,16 @@ export class BreakpointsManager {
 							}
 				
 							const location = actualLocation.generated ?? actualLocation;
-							const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
-							breakpointListActor.setBreakpoint(
-								url,
-								location.line,
-								location.column,
-								breakpointInfo.requestedBreakpoint.condition,
-								logValue
-							);
+							const url = actualLocation.generated ? sourceAdapter.generatedUrl : sourceAdapter.url;
+							if (url) {
+								breakpointListActor.setBreakpoint(
+									url,
+									location.line,
+									location.column,
+									breakpointInfo.requestedBreakpoint.condition,
+									logValue
+								);
+							}
 							if (!breakpointInfo.verified) {
 								this.verifyBreakpoint(breakpointInfo);
 							}	
@@ -96,15 +98,17 @@ export class BreakpointsManager {
 						}
 			
 						const location = actualLocation.generated ?? actualLocation;
-						const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
-						for (const [, breakpointListActor] of this.session.breakpointLists) {
-							breakpointListActor.setBreakpoint(
-								url,
-								location.line,
-								location.column,
-								breakpointInfo.requestedBreakpoint.condition,
-								logValue
-							);
+						const url = actualLocation.generated ? sourceAdapter.generatedUrl : sourceAdapter.url;
+						if (url) {
+							for (const [, breakpointListActor] of this.session.breakpointLists) {
+								breakpointListActor.setBreakpoint(
+									url,
+									location.line,
+									location.column,
+									breakpointInfo.requestedBreakpoint.condition,
+									logValue
+								);
+							}
 						}
 						if (!breakpointInfo.verified) {
 							this.verifyBreakpoint(breakpointInfo);
@@ -128,13 +132,15 @@ export class BreakpointsManager {
 						);
 						if (actualLocation) {
 							const location = actualLocation.generated ?? actualLocation;
-							const url = actualLocation.generated ? (sourceAdapter.actors[0] as SourceMappingSourceActorProxy).underlyingActor.url! : sourceAdapter.actors[0].url!;
-							for (const [, breakpointListActor] of this.session.breakpointLists) {
-								breakpointListActor.removeBreakpoint(
-									url,
-									location.line,
-									location.column
-								);
+							const url = actualLocation.generated ? sourceAdapter.generatedUrl : sourceAdapter.url;
+							if (url) {
+								for (const [, breakpointListActor] of this.session.breakpointLists) {
+									breakpointListActor.removeBreakpoint(
+										url,
+										location.line,
+										location.column
+									);
+								}
 							}
 						}
 					}

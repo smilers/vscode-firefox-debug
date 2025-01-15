@@ -26,13 +26,13 @@ export class SourcesManager {
 		const normalizedPath = path ? normalizePath(path) : undefined;
 
 		if (adapter) {
-			adapter.actors.push(actor);
+			adapter.actors.add(actor);
 		} else {
 			if (normalizedPath) {
 				adapter = this.adaptersByPath.getExisting(normalizedPath);
 			}
 			if (adapter) {
-				adapter.actors.push(actor);
+				adapter.actors.add(actor);
 			} else {
 				adapter = new SourceAdapter(actor, path, this.adapters);
 			}
@@ -56,10 +56,7 @@ export class SourcesManager {
 		if (!adapter) return;
 
 		this.adaptersByActor.delete(actor.name);
-		const index = adapter.actors.indexOf(actor);
-		if (index >= 0) {
-			adapter.actors.splice(index, 1);
-		}
+		adapter.actors.remove(actor);
 	}
 
 	public getAdapterForID(id: number) {

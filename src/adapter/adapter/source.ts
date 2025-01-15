@@ -3,6 +3,7 @@ import { MappedLocation } from '../location';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { Source } from '@vscode/debugadapter';
 import { ISourceActorProxy } from '../firefox/actorProxy/source';
+import { SourceMappingSourceActorProxy } from '../firefox/sourceMaps/source';
 import { Registry } from './registry';
 
 const log = Log.create('SourceAdapter');
@@ -13,10 +14,11 @@ const log = Log.create('SourceAdapter');
 export class SourceAdapter {
 
 	public readonly url: string | undefined;
+	public readonly generatedUrl: string | undefined;
 	public readonly introductionType: 'scriptElement' | 'eval' | 'Function' | 'debugger eval' | 'wasm' | undefined;
 	public readonly id: number;
 	public readonly source: Source;
-	public readonly actors: ISourceActorProxy[];
+	public readonly actors: SourceActorCollection;
 	private blackboxed = false;
 
 	public get isBlackBoxed() { return this.blackboxed; }
@@ -28,6 +30,9 @@ export class SourceAdapter {
 		sourceRegistry: Registry<SourceAdapter>
 	) {
 		this.url = actor.url ?? undefined;
+		if (actor instanceof SourceMappingSourceActorProxy) {
+			this.generatedUrl = actor.underlyingActor.url ?? undefined;
+		}
 		this.introductionType = actor.source.introductionType ?? undefined;
 		this.id = sourceRegistry.register(this);
 
@@ -44,7 +49,7 @@ export class SourceAdapter {
 			this.source = new Source(sourceName, actor.url || undefined, this.id);
 		}
 
-		this.actors = [actor];
+		this.actors = new SourceActorCollection(actor);
 	}
 
 	public async setBlackBoxed(blackboxed: boolean) {
@@ -53,11 +58,19 @@ export class SourceAdapter {
 		}
 		this.blackboxed = blackboxed;
 		(<DebugProtocol.Source>this.source).presentationHint = blackboxed ? 'deemphasize' : 'normal';
-		await Promise.all(this.actors.map(actor => actor.setBlackbox(blackboxed)));
+		await this.actors.runWithAllActors(actor => actor.setBlackbox(blackboxed));
 	}
 
-	public async getBreakableLocations(line: number): Promise<MappedLocation[]> {
-		return await this.actors[0]?.getBreakableLocations(line) ?? [];
+	public getBreakableLines(): Promise<number[]> {
+		return this.actors.runWithSomeActor(actor => actor.getBreakableLines());
+	}
+
+	public getBreakableLocations(line: number): Promise<MappedLocation[]> {
+		return this.actors.runWithSomeActor(actor => actor.getBreakableLocations(line));
+	}
+
+	public fetchSource(): Promise<FirefoxDebugProtocol.Grip> {
+		return this.actors.runWithSomeActor(actor => actor.fetchSource());
 	}
 
 	public async findNextBreakableLocation(
@@ -65,20 +78,17 @@ export class SourceAdapter {
 		requestedColumn: number
 	): Promise<MappedLocation | undefined> {
 
-		const actor = this.actors[0];
-		if (!actor) return;
-
-		let breakableLocations = await actor.getBreakableLocations(requestedLine);
+		let breakableLocations = await this.getBreakableLocations(requestedLine);
 		for (const location of breakableLocations) {
 			if (location.column >= requestedColumn) {
 				return location;
 			}
 		}
 
-		const breakableLines = await actor.getBreakableLines();
+		const breakableLines = await this.getBreakableLines();
 		for (const line of breakableLines) {
 			if (line > requestedLine) {
-				breakableLocations = await actor.getBreakableLocations(line);
+				breakableLocations = await this.getBreakableLocations(line);
 				if (breakableLocations.length > 0) {
 					return breakableLocations[0];
 				}
@@ -86,5 +96,56 @@ export class SourceAdapter {
 		}
 
 		return undefined;
+	}
+}
+
+export class SourceActorCollection {
+
+	private readonly actors: ISourceActorProxy[];
+	private someActor: Promise<ISourceActorProxy>;
+	private resolveSomeActor: ((actor: ISourceActorProxy) => void) | undefined;
+
+	public constructor(actor: ISourceActorProxy) {
+		this.actors = [actor];
+		this.someActor = Promise.resolve(actor);
+	}
+
+	public add(actor: ISourceActorProxy) {
+		this.actors.push(actor);
+		if (this.resolveSomeActor) {
+			this.resolveSomeActor(actor);
+			this.resolveSomeActor = undefined;
+		}
+	}
+
+	public remove(actor: ISourceActorProxy) {
+		const index = this.actors.indexOf(actor);
+		if (index >= 0) {
+			this.actors.splice(index, 1);
+			if (this.actors.length > 0) {
+				this.someActor = Promise.resolve(this.actors[0]);
+			} else {
+				this.someActor = new Promise(resolve => this.resolveSomeActor = resolve);
+			}
+		}
+	}
+
+	public async runWithSomeActor<T>(fn: (actor: ISourceActorProxy) => Promise<T>): Promise<T> {
+		while (true) {
+			const actor = await this.someActor;
+			try {
+				return await fn(actor);
+			} catch (err: any) {
+				if (err.error === 'noSuchActor') {
+					this.remove(actor);
+					continue;
+				}
+				throw err;
+			}
+		}
+	}
+
+	public async runWithAllActors<T>(fn: (actor: ISourceActorProxy) => Promise<T>): Promise<void> {
+		await Promise.all(this.actors.map(actor => fn(actor)));
 	}
 }
