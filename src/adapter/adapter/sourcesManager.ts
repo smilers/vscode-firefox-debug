@@ -1,6 +1,6 @@
 import { Log } from '../util/log';
 import { ISourceActorProxy } from "../firefox/actorProxy/source";
-import { DeferredMap } from "../util/deferredMap";
+import { DeferredMap } from "../../common/deferredMap";
 import { pathsAreEqual } from "../util/misc";
 import { PathMapper } from "../util/pathMapper";
 import { Registry } from "./registry";

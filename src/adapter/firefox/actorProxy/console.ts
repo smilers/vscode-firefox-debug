@@ -2,7 +2,7 @@ import { Log } from '../../util/log';
 import { DebugConnection } from '../connection';
 import { exceptionGripToString } from '../../util/misc';
 import { BaseActorProxy } from './base';
-import { DeferredMap } from '../../util/deferredMap';
+import { DeferredMap } from '../../../common/deferredMap';
 
 let log = Log.create('ConsoleActorProxy');
 

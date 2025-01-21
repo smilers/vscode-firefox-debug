@@ -39,7 +39,7 @@ export async function createPathMappingForActiveTextEditor(loadedScriptsProvider
 		return;
 	}
 
-	const ffUrls = loadedScriptsProvider.getSourceUrls(debugSession.id);
+	const ffUrls = await loadedScriptsProvider.getSourceUrls(debugSession.id);
 	if (!ffUrls) {
 		vscode.window.showErrorMessage("Couldn't load the sources of the active debug session");
 		return;
@@ -83,7 +83,7 @@ export async function createPathMappingForPath(
 		return;
 	}
 
-	const ffUrls = loadedScriptsProvider.getSourceUrls(debugSession.id);
+	const ffUrls = await loadedScriptsProvider.getSourceUrls(debugSession.id);
 	if (!ffUrls || (ffUrls.length === 0)) {
 		return;
 	}

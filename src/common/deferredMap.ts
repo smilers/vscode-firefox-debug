@@ -20,6 +20,10 @@ export class DeferredMap<S, T> {
 		return this.existing.get(key);
 	}
 
+	public getAllExisting(): T[] {
+		return [...this.existing.values()];
+	}
+
 	public set(key: S, value: T): void {
 		if (this.pending.has(key)) {
 			this.pending.get(key)!(value);

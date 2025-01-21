@@ -38,8 +38,8 @@ export class LoadedScriptsProvider implements vscode.TreeDataProvider<TreeNode> 
 		this.sendTreeDataChangedEvent(changedItem);
 	}
 
-	public removeThread(threadId: number, sessionId: string) {
-		let changedItem = this.root.removeThread(threadId, sessionId);
+	public async removeThread(threadId: number, sessionId: string) {
+		let changedItem = await this.root.removeThread(threadId, sessionId);
 		this.sendTreeDataChangedEvent(changedItem);
 	}
 
@@ -48,12 +48,12 @@ export class LoadedScriptsProvider implements vscode.TreeDataProvider<TreeNode> 
 		this.sendTreeDataChangedEvent(changedItem);
 	}
 
-	public removeSources(threadId: number, sessionId: string) {
-		let changedItem = this.root.removeSources(threadId, sessionId);		
+	public async removeSources(threadId: number, sessionId: string) {
+		let changedItem = await this.root.removeSources(threadId, sessionId);		
 		this.sendTreeDataChangedEvent(changedItem);
 	}
 
-	public getSourceUrls(sessionId: string): string[] | undefined {
+	public async getSourceUrls(sessionId: string): Promise<string[] | undefined> {
 		return this.root.getSourceUrls(sessionId);
 	}
 

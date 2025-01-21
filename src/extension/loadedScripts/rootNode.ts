@@ -2,62 +2,30 @@ import * as vscode from 'vscode';
 import { ThreadStartedEventBody, NewSourceEventBody } from '../../common/customEvents';
 import { TreeNode } from './treeNode';
 import { SessionNode } from './sessionNode';
-
-interface PendingSession {
-	promise: Promise<SessionNode>;
-	resolve: (sessionNode: SessionNode) => void;
-}
+import { DeferredMap } from '../../common/deferredMap';
 
 export class RootNode extends TreeNode {
 
-	private children: SessionNode[] = [];
+	private children = new DeferredMap<string, SessionNode>();
 	private showSessions = false;
-	private pendingSessions = new Map<string, PendingSession>();
 
 	public constructor() {
 		super('');
 		this.treeItem.contextValue = 'root';
 	}
 
-	private async waitForSession(sessionId: string): Promise<SessionNode> {
-		const sessionNode = this.children.find((child) => (child.id === sessionId));
-		if (sessionNode) {
-			return sessionNode;
-		}
-		let resolve!: (sessionNode: SessionNode) => void;
-		const promise = new Promise<SessionNode>(r => resolve = r);
-		this.pendingSessions.set(sessionId, { promise, resolve });
-		return await promise;
+	private waitForSession(sessionId: string): Promise<SessionNode> {
+		return this.children.get(sessionId);
 	}
 
 	public addSession(session: vscode.DebugSession): TreeNode | undefined {
-
-		if (!this.children.some((child) => (child.id === session.id))) {
-
-			let index = this.children.findIndex((child) => (child.treeItem.label! > session.name));
-			if (index < 0) index = this.children.length;
-
-			const sessionNode = new SessionNode(session, this);
-			this.children.splice(index, 0, sessionNode);
-
-			const pendingSession = this.pendingSessions.get(session.id);
-			if (pendingSession) {
-				pendingSession.resolve(sessionNode);
-				this.pendingSessions.delete(session.id);
-			}
-
-			return this;
-
-		} else {
-			return undefined;
-		}
+		this.children.set(session.id, new SessionNode(session, this));
+		return this;
 	}
 
 	public removeSession(sessionId: string): TreeNode | undefined {
-
-		this.children = this.children.filter((child) => (child.id !== sessionId));
+		this.children.delete(sessionId);
 		return this;
-
 	}
 
 	public async addThread(
@@ -70,12 +38,12 @@ export class RootNode extends TreeNode {
 
 	}
 
-	public removeThread(
+	public async removeThread(
 		threadId: number,
 		sessionId: string
-	): TreeNode | undefined {
+	): Promise<TreeNode | undefined> {
 
-		let sessionItem = this.children.find((child) => (child.id === sessionId));
+		const sessionItem = await this.waitForSession(sessionId);
 		return sessionItem ? this.fixChangedItem(sessionItem.removeThread(threadId)) : undefined;
 
 	}
@@ -90,16 +58,16 @@ export class RootNode extends TreeNode {
 
 	}
 
-	public removeSources(threadId: number, sessionId: string): TreeNode | undefined {
+	public async removeSources(threadId: number, sessionId: string): Promise<TreeNode | undefined> {
 
-		let sessionItem = this.children.find((child) => (child.id === sessionId));
+		const sessionItem = await this.waitForSession(sessionId);
 		return sessionItem ? this.fixChangedItem(sessionItem.removeSources(threadId)) : undefined;
 
 	}
 
-	public getSourceUrls(sessionId: string): string[] | undefined {
+	public async getSourceUrls(sessionId: string): Promise<string[] | undefined> {
 
-		const sessionNode = this.children.find(child => (child.id === sessionId));
+		const sessionNode = await this.waitForSession(sessionId);
 		return sessionNode ? sessionNode.getSourceUrls() : undefined;
 
 	}
@@ -108,14 +76,16 @@ export class RootNode extends TreeNode {
 
 		this.treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
 
-		if (this.showSessions || (this.children.length > 1)) {
+		const existingChildren = this.children.getAllExisting();
+	
+		if (this.showSessions || (existingChildren.length > 1)) {
 
 			this.showSessions = true;
-			return this.children;
+			return existingChildren;
 
-		} else if (this.children.length == 1) {
+		} else if (existingChildren.length == 1) {
 
-			return this.children[0].getChildren();
+			return existingChildren[0].getChildren();
 
 		} else {
 			return [];
