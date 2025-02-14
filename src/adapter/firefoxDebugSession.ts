@@ -399,6 +399,14 @@ export class FirefoxDebugSession {
 				(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(url)) ||
 				 this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(url)))) {
 				log.info('Not attaching to this thread');
+
+				targetActor.onThreadState(event => {
+					if (event.state === 'paused') {
+						log.info("Detached thread paused, resuming");
+						threadActor.resume();
+					}
+				});
+
 				return;
 			}
 
