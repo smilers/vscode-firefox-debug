@@ -1,3 +1,10 @@
+### Version 2.14.1
+* fix truncated console messages
+* fix threads not showing up in the loaded scripts panel
+* only show content scripts when debugging a WebExtension
+* don't open a new tab in attach configurations
+* resume detached threads when they pause
+
 ### Version 2.14.0
 * improve how console messages are rendered
 
