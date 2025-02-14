@@ -184,13 +184,6 @@ export class FirefoxDebugSession {
 
 				this.reloadTabs = false;
 
-				if (this.config.attach && (this.threads.count === 0)) {
-					if (!await openNewTab(this.config.attach, await this.deviceActor.getDescription())) {
-						reject('None of the tabs opened in Firefox match the given URL. If you specify the path to Firefox by setting "firefoxExecutable" in your attach configuration, a new tab for the given URL will be opened automatically.');
-						return;
-					}
-				}
-
 				resolve();
 			});
 
