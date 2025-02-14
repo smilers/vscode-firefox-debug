@@ -642,7 +642,7 @@ export class FirefoxDebugSession {
 				if (typeof grip === 'object' && grip.type === 'object') {
 					args.push(VariableAdapter.fromGrip(`arg${index}`, undefined, undefined, grip, true, threadAdapter));
 				}
-				return renderGrip(grip, false);
+				return typeof grip === 'string' ? grip : renderGrip(grip);
 			});
 			let msg = previews.join(' ');
 
