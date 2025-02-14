@@ -24,8 +24,14 @@ export class DebugProtocolTransport extends EventEmitter {
 		this.buffer = Buffer.alloc(DebugProtocolTransport.initialBufferLength);
 		this.bufferedLength = 0;
 		this.receivingHeader = true;
+		let firstChunkReceived = false;
 
 		this.socket.on('data', (chunk: Buffer) => {
+
+			if (!firstChunkReceived) {
+				firstChunkReceived = true;
+				log.debug(`First chunk received from Firefox: ${chunk.toString('hex')}`);
+			}
 
 			let processedLength = 0;
 			while (processedLength < chunk.length) {

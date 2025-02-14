@@ -121,7 +121,9 @@ export class FirefoxDebugSession {
 
 			let socket: Socket;
 			try {
+				log.debug("Connecting to Firefox");
 				socket = await this.connectToFirefox();
+				log.debug("Connected");
 			} catch(err: any) {
 				if (!err?.message && this.config.attach) {
 					reject(new Error(`Couldn't connect to Firefox - please ensure it is running and listening on port ${this.config.attach.port} for debugger connections`));
