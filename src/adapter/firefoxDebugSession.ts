@@ -439,7 +439,9 @@ export class FirefoxDebugSession {
 		await Promise.all([
 			watcherActor.watchTargets('frame'),
 			watcherActor.watchTargets('worker'),
-			watcherActor.supportsContentScriptTargets ? watcherActor.watchTargets('content_script') : Promise.resolve(),
+			this.config.addon && watcherActor.supportsContentScriptTargets ?
+				watcherActor.watchTargets('content_script') :
+				Promise.resolve(),
 			watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']),
 			configurator.updateConfiguration(this.threadConfiguration)
 		]);
