@@ -16,6 +16,10 @@ export class TargetActorProxy extends BaseActorProxy {
 		super(target.actor, connection, log);
 	}
 
+	public reload() {
+		return this.sendRequest({ type: 'reload' });
+	}
+
 	public onConsoleMessages(cb: (consoleMessages: FirefoxDebugProtocol.ConsoleMessage[]) => void) {
 		this.on('console-message', cb);
 	}

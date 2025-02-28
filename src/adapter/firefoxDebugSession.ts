@@ -22,7 +22,7 @@ import { SourceAdapter } from './adapter/source';
 import { VariablesProvider } from './adapter/variablesProvider';
 import { VariableAdapter } from './adapter/variable';
 import { Registry } from './adapter/registry';
-import { ThreadAdapter } from './adapter/thread';
+import { TargetType, ThreadAdapter } from './adapter/thread';
 import { ConsoleAPICallAdapter } from './adapter/consoleAPICall';
 import { BreakpointsManager } from './adapter/breakpointsManager';
 import { DataBreakpointsManager } from './adapter/dataBreakpointsManager';
@@ -43,6 +43,7 @@ import { DescriptorAdapter } from './adapter/descriptor';
 import { DescriptorActorProxy } from './firefox/actorProxy/descriptor';
 import { EventBreakpointsManager } from './adapter/eventBreakpointsManager';
 import { renderGrip } from './adapter/preview';
+import { shortenUrl } from './util/misc';
 
 let log = Log.create('FirefoxDebugSession');
 let consoleActorLog = Log.create('ConsoleActor');
@@ -55,6 +56,7 @@ export type ThreadConfiguration = Pick<
 export class FirefoxDebugSession {
 
 	public readonly isWindowsPlatform = detectWindowsPlatform();
+	public processDescriptorMode!: boolean;
 	public readonly pathMapper: PathMapper;
 	public readonly sources: SourcesManager;
 	public sourceMaps!: SourceMapsManager;
@@ -145,20 +147,23 @@ export class FirefoxDebugSession {
 			this.sourceMaps = this.firefoxDebugConnection.sourceMaps;
 			let rootActor = this.firefoxDebugConnection.rootActor;
 
-			// attach to all tabs, register the corresponding threads and inform VSCode about them
-			rootActor.onTabOpened(async (tabDescriptorActor) => {
+			if (!this.processDescriptorMode) {
+				// attach to all tabs, register the corresponding threads and inform VSCode about them
+				rootActor.onTabOpened(async (tabDescriptorActor) => {
 
-				if (this.reloadTabs) {
-					await tabDescriptorActor.reload();
-					await delay(200);
-				}
+					if (this.reloadTabs) {
+						await tabDescriptorActor.reload();
+						await delay(200);
+					}
 
-				await this.attachDescriptor(tabDescriptorActor);
-			});
+					const adapter = await this.attachDescriptor(tabDescriptorActor);
+					await adapter.watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']);
+				});
 
-			rootActor.onTabListChanged(() => {
-				rootActor.fetchTabs();
-			});
+				rootActor.onTabListChanged(() => {
+					rootActor.fetchTabs();
+				});
+			}
 
 			rootActor.onInit(async (initialResponse) => {
 
@@ -168,23 +173,33 @@ export class FirefoxDebugSession {
 					return;
 				}
 
+				this.processDescriptorMode = !!initialResponse.traits.supportsEnableWindowGlobalThreadActors;
+
 				const actors = await rootActor.fetchRoot();
 
 				this.preferenceActor = actors.preference;
 				this.addonsActor = actors.addons;
 				this.deviceActor = actors.device;
 
+				let adapter: DescriptorAdapter | undefined;
+				if (this.processDescriptorMode) {
+					const parentProcess = await rootActor.getProcess(0);
+					adapter = await this.attachDescriptor(parentProcess);
+				} else {
+					rootActor.fetchTabs().then(() => this.reloadTabs = false);
+				}
+
 				if (this.addonManager) {
 					if (actors.addons) {
-						this.addonManager.sessionStarted(rootActor, actors.addons, actors.preference);
+						await this.addonManager.sessionStarted(rootActor, actors.addons, actors.preference);
 					} else {
 						reject('No AddonsActor received from Firefox');
 					}
 				}
 
-				await rootActor.fetchTabs();
-
-				this.reloadTabs = false;
+				if (this.processDescriptorMode) {
+					await adapter?.watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']);
+				}
 
 				resolve();
 			});
@@ -212,8 +227,10 @@ export class FirefoxDebugSession {
 					reload = () => {
 						log.debug('Reloading tabs');
 
-						for (let [, descriptor] of this.descriptors) {
-							descriptor.descriptorActor.reload();
+						for (let [, thread] of this.threads) {
+							if (thread.type === 'tab') {
+								thread.targetActor.reload();
+							}
 						}
 					}
 				}
@@ -372,7 +389,7 @@ export class FirefoxDebugSession {
 		}
 	}
 
-	public async attachDescriptor(descriptorActor: DescriptorActorProxy, isTab = true) {
+	public async attachDescriptor(descriptorActor: DescriptorActorProxy) {
 		const watcherActor = await descriptorActor.getWatcher();
 		const [configurator, breakpointList] = await Promise.all([
 			watcherActor.getThreadConfiguration(),
@@ -384,10 +401,6 @@ export class FirefoxDebugSession {
 			descriptorActor, watcherActor, configurator, breakpointList
 		);
 
-		if (isTab) {
-			log.info(`Tab ${adapter.id} opened`);
-		}
-
 		descriptorActor.onDestroyed(() => {
 			for (const threadAdapter of adapter.threads) {
 				this.sendThreadExitedEvent(threadAdapter);
@@ -396,23 +409,64 @@ export class FirefoxDebugSession {
 			adapter.dispose();
 		});
 
-		watcherActor.onTargetAvailable(async ([targetActor, threadActor, consoleActor, url]) => {
-			if (isTab && url &&
-				(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(url)) ||
-				 this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(url)))) {
-				log.info('Not attaching to this thread');
+		watcherActor.onTargetAvailable(async ([targetActor, threadActor, consoleActor]) => {
 
+			let skip = false;
+			if (descriptorActor.type === 'webExtension' && targetActor.target.isFallbackExtensionDocument) {
+				skip = true;
+			}
+			if (targetActor.target.addonId &&
+				(!this.addonManager || targetActor.target.addonId !== await this.addonManager.addonId)) {
+				skip = true;
+			}
+			const url = targetActor.target.url;
+			if (
+				descriptorActor.type === 'process' && !targetActor.target.addonId && url &&
+				(!this.config.tabFilter.include.some(tabFilter => tabFilter.test(url)) ||
+				this.config.tabFilter.exclude.some(tabFilter => tabFilter.test(url)))
+			) {
+				skip = true;
+			}
+			if (skip) {
+				log.warn('Not attaching to this thread');
 				targetActor.onThreadState(event => {
 					if (event.state === 'paused') {
 						log.info("Detached thread paused, resuming");
 						threadActor.resume();
 					}
 				});
-
 				return;
 			}
 
-			const threadAdapter = await this.attachThread(targetActor, threadActor, consoleActor, `Tab ${adapter.id}`, url);
+			let type: TargetType;
+			let name: string;
+			if (
+				(descriptorActor.type === 'tab' && targetActor.name.includes("contentScriptTarget")) ||
+				(descriptorActor.type === 'process' && targetActor.target.targetType === 'content_script')
+			) {
+				type =  'contentScript';
+				name = 'Content scripts';
+			} else if (
+				descriptorActor.type === 'webExtension' ||
+				(descriptorActor.type === 'process' && targetActor.target.addonId)
+			) {
+				type = 'backgroundScript';
+				name = 'Background scripts';
+			} else {
+				const { parentInnerWindowId, relatedDocumentInnerWindowId, url } = targetActor.target;
+				if (relatedDocumentInnerWindowId) {
+					type = 'worker';
+					name = `Worker ${shortenUrl(url ?? '')}`;
+				} else if (parentInnerWindowId) {
+					type = 'iframe';
+					name = `IFrame ${shortenUrl(url ?? '')}`;
+				} else {
+					type = 'tab';
+					name = `Tab ${shortenUrl(url ?? '')}`;
+				}
+			}
+
+			const threadAdapter = await this.attachThread(type, name, targetActor, threadActor, consoleActor);
 			adapter.threads.add(threadAdapter);
 		});
 
@@ -423,11 +477,7 @@ export class FirefoxDebugSession {
 				return;
 			}
 	
-			const target = threadAdapter.targetActor.target;
-			if (target.isTopLevelTarget &&
-				!target.isFallbackExtensionDocument &&
-				this.config.clearConsoleOnReload
-			) {
+			if (threadAdapter.type === 'tab' && this.config.clearConsoleOnReload) {
 				this.sendEvent(new OutputEvent('\x1b[2J'));
 			}
 
@@ -445,19 +495,21 @@ export class FirefoxDebugSession {
 			this.config.addon && watcherActor.supportsContentScriptTargets ?
 				watcherActor.watchTargets('content_script') :
 				Promise.resolve(),
-			watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']),
 			configurator.updateConfiguration(this.threadConfiguration)
 		]);
+
+		return adapter;
 	}
 
 	private async attachThread(
+		type: TargetType,
+		name: string,
 		targetActor: TargetActorProxy,
 		threadActor: IThreadActorProxy,
 		consoleActor: ConsoleActorProxy,
-		name: string,
-		url: string | undefined
 	) {
-		const threadAdapter = new ThreadAdapter(threadActor, targetActor, consoleActor, name, url, this);
+		const threadAdapter = new ThreadAdapter(type, name, threadActor, targetActor, consoleActor, this);
+		log.info(`Attaching ${name}`);
 		this.threadsByTargetActorName.set(targetActor.name, threadAdapter);
 
 		this.sendThreadStartedEvent(threadAdapter);
@@ -539,7 +591,6 @@ export class FirefoxDebugSession {
 				if (event.why?.type === 'exception') {
 	
 					let frames = await threadAdapter.fetchAllStackFrames();
-					// TODO use the frame from the paused event?
 					let startFrame = (frames.length > 0) ? frames[frames.length - 1] : undefined;
 					if (startFrame) {
 						try {

@@ -7,7 +7,6 @@ import { PreferenceActorProxy } from '../firefox/actorProxy/preference';
 import { FirefoxDebugSession } from '../firefoxDebugSession';
 import { PopupAutohideEventBody } from '../../common/customEvents';
 import { isWindowsPlatform } from '../../common/util';
-import { TargetActorProxy } from '../firefox/actorProxy/target';
 import { DescriptorActorProxy } from '../firefox/actorProxy/descriptor';
 
 const log = Log.create('AddonManager');
@@ -21,11 +20,12 @@ export const popupAutohidePreferenceKey = 'ui.popup.disable_autohide';
  */
 export class AddonManager {
 
+	private resolveAddonId!: (addonId: string) => void;
+	public readonly addonId = new Promise<string>(resolve => this.resolveAddonId = resolve);
+
 	private readonly config: ParsedAddonConfiguration;
 
-	private addonAttached = false;
 	private descriptorActor: DescriptorActorProxy | undefined = undefined;
-	private targetActor: TargetActorProxy | undefined = undefined;
 
 	constructor(
 		private readonly debugSession: FirefoxDebugSession
@@ -41,11 +41,9 @@ export class AddonManager {
 
 		const addonPath = isWindowsPlatform() ? path.normalize(this.config.path) : this.config.path;
 		let result = await addonsActor.installAddon(addonPath);
-		if (!this.config.id) {
-			this.config.id = result.addon.id;
-		}
+		this.resolveAddonId(result.addon.id);
 
-		this.fetchAddonsAndAttach(rootActor);
+		await this.fetchDescriptor(rootActor);
 
 		if (this.config.popupAutohideButton) {
 			const popupAutohide = !(await preferenceActor.getBoolPref(popupAutohidePreferenceKey));
@@ -54,34 +52,29 @@ export class AddonManager {
 	}
 
 	public async reloadAddon(): Promise<void> {
-		if (!this.targetActor) {
+		if (!this.descriptorActor) {
 			throw 'Addon isn\'t attached';
 		}
 
-		await this.descriptorActor?.reload();
+		await this.descriptorActor.reload();
 	}
 
-	private async fetchAddonsAndAttach(rootActor: RootActorProxy): Promise<void> {
+	private async fetchDescriptor(rootActor: RootActorProxy): Promise<void> {
 
-		if (this.addonAttached) return;
+		const addons = await rootActor.fetchAddons();
 
-		let addons = await rootActor.fetchAddons();
+		addons.forEach(async addon => {
+			if (addon.id === await this.addonId) {
+				this.descriptorActor = new DescriptorActorProxy(
+					addon.actor,
+					'webExtension',
+					this.debugSession.firefoxDebugConnection
+				);
 
-		if (this.addonAttached) return;
-
-		addons.forEach((addon) => {
-			if (addon.id === this.config.id) {
-				(async () => {
-
-					this.descriptorActor = new DescriptorActorProxy(
-						addon.actor,
-						this.debugSession.firefoxDebugConnection
-					);
-
-					await this.debugSession.attachDescriptor(this.descriptorActor, false);
-
-					this.addonAttached = true;
-				})();
+				if (!this.debugSession.processDescriptorMode) {
+					const adapter = await this.debugSession.attachDescriptor(this.descriptorActor);
+					await adapter.watcherActor.watchResources(['console-message', 'error-message', 'source', 'thread-state']);
+				}
 			}
 		});
 	}

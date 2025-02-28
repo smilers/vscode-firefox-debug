@@ -17,7 +17,7 @@ export class DescriptorAdapter {
 		private readonly configurators: Registry<ThreadConfigurationActorProxy>,
 		private readonly breakpointLists: Registry<BreakpointListActorProxy>,
 		public readonly descriptorActor: DescriptorActorProxy,
-		private readonly watcherActor: WatcherActorProxy,
+		public readonly watcherActor: WatcherActorProxy,
 		private readonly configurator: ThreadConfigurationActorProxy,
 		private readonly breakpointList: BreakpointListActorProxy
 	) {

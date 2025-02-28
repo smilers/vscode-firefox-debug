@@ -31,6 +31,15 @@ export function normalizePath(rawPath: string) {
 	return normalized;
 }
 
+export function shortenUrl(url: string) {
+	if (url.startsWith('file://')) {
+		const i = url.lastIndexOf('/');
+		return i >= 0 ? url.substring(i + 1) : url;
+	}
+	const i = url.indexOf('://');
+	return i >= 0 ? url.substring(i + 3) : url;
+}
+
 /**
  * extract an error message from an exception
  * [grip](https://github.com/mozilla/gecko-dev/blob/master/devtools/docs/backend/protocol.md#grips)

@@ -23,6 +23,10 @@ export class LoadedScriptsProvider implements vscode.TreeDataProvider<TreeNode> 
 		return parent.getChildren();
 	}
 
+	public hasSession(sessionId: string) {
+		return this.root.hasSession(sessionId);
+	}
+
 	public addSession(session: vscode.DebugSession) {
 		let changedItem = this.root.addSession(session);
 		this.sendTreeDataChangedEvent(changedItem);

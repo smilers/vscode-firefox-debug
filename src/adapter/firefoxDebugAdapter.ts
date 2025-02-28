@@ -224,7 +224,7 @@ export class FirefoxDebugAdapter extends DebugAdapterBase {
 		log.debug(`${this.session.threads.count} threads`);
 
 		let threads = this.session.threads.map(
-			(threadAdapter) => new Thread(threadAdapter.id, `${threadAdapter.name}: ${threadAdapter.url}`));
+			(threadAdapter) => new Thread(threadAdapter.id, threadAdapter.name));
 
 		return { threads };
 	}

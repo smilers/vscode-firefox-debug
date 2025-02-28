@@ -83,6 +83,10 @@ export async function createPathMappingForPath(
 		return;
 	}
 
+	if (!loadedScriptsProvider.hasSession(debugSession.id)) {
+		return;
+	}
+
 	const ffUrls = await loadedScriptsProvider.getSourceUrls(debugSession.id);
 	if (!ffUrls || (ffUrls.length === 0)) {
 		return;

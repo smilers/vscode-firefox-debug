@@ -18,6 +18,10 @@ export class RootNode extends TreeNode {
 		return this.children.get(sessionId);
 	}
 
+	public hasSession(sessionId: string): boolean {
+		return !!this.children.getExisting(sessionId);
+	}
+
 	public addSession(session: vscode.DebugSession): TreeNode | undefined {
 		this.children.set(session.id, new SessionNode(session, this));
 		return this;

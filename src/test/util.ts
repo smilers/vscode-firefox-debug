@@ -26,6 +26,8 @@ export async function initDebugClient(
 		launchArgs = Object.assign(launchArgs, extraLaunchArgs);
 	}
 
+	const pageLoadedPromise = receivePageLoadedEvent(dc);
+
 	await dc.start();
 	await Promise.all([
 		dc.launch(launchArgs),
@@ -33,7 +35,7 @@ export async function initDebugClient(
 	]);
 
 	if (waitForPageLoadedEvent) {
-		await receivePageLoadedEvent(dc);
+		await pageLoadedPromise;
 	}
 
 	return dc;
@@ -71,6 +73,8 @@ export async function initDebugClientForAddon(
 
 	let dc = new DebugClient('node', './dist/adapter.bundle.js', 'firefox');
 
+	const pageLoadedPromise = receivePageLoadedEvent(dc);
+
 	await dc.start();
 	await Promise.all([
 		dc.launch(dcArgs),
@@ -78,7 +82,7 @@ export async function initDebugClientForAddon(
 	]);
 	dc.setExceptionBreakpointsRequest({ filters: [] });
 
-	await receivePageLoadedEvent(dc);
+	await pageLoadedPromise;
 
 	if (options && options.delayedNavigation) {
 		await setConsoleThread(dc, await findTabThread(dc));

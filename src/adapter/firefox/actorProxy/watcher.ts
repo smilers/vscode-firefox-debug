@@ -47,7 +47,7 @@ export class WatcherActorProxy extends BaseActorProxy {
 		await this.sendRequest({ type: 'watchTargets', targetType });
 	}
 
-	public onTargetAvailable(cb: (target: [TargetActorProxy, IThreadActorProxy, ConsoleActorProxy, string | undefined]) => void) {
+	public onTargetAvailable(cb: (target: [TargetActorProxy, IThreadActorProxy, ConsoleActorProxy]) => void) {
 		this.on('targetAvailable', cb);
 	}
 
@@ -61,7 +61,7 @@ export class WatcherActorProxy extends BaseActorProxy {
 			const threadActorProxy = new ThreadActorProxy(event.target.threadActor, this.connection);
 			const sourcemappingThreadActorProxy = new SourceMappingThreadActorProxy(threadActorProxy, this.connection);
 			const consoleActorProxy = new ConsoleActorProxy(event.target.consoleActor, this.connection);
-			this.emit('targetAvailable', [targetActorProxy, sourcemappingThreadActorProxy, consoleActorProxy, event.target.url]);
+			this.emit('targetAvailable', [targetActorProxy, sourcemappingThreadActorProxy, consoleActorProxy]);
 		} else if (event.type === 'target-destroyed-form') {
 			this.emit('targetDestroyed', event.target.actor);
 		} else {

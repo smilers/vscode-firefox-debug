@@ -14,6 +14,8 @@ import { ISourceActorProxy } from '../firefox/actorProxy/source';
 
 let log = Log.create('ThreadAdapter');
 
+export type TargetType = 'tab' | 'iframe' | 'worker' | 'backgroundScript' | 'contentScript';
+
 /**
  * Adapter class for a thread
  */
@@ -22,6 +24,9 @@ export class ThreadAdapter extends EventEmitter {
 	public id: number;
 	public get actorName() {
 		return this.actor.name;
+	}
+	public get url(): string | undefined {
+		return this.targetActor.target.url;
 	}
 
 	/**
@@ -54,11 +59,11 @@ export class ThreadAdapter extends EventEmitter {
 	public threadPausedReason?: FirefoxDebugProtocol.ThreadPausedReason;
 
 	public constructor(
+		public readonly type: TargetType,
+		public readonly name: string,
 		public readonly actor: IThreadActorProxy,
 		public readonly targetActor: TargetActorProxy,
 		private readonly consoleActor: ConsoleActorProxy,
-		public readonly name: string,
-		public readonly url: string | undefined,
 		public readonly debugSession: FirefoxDebugSession
 	) {
 		super();

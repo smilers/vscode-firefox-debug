@@ -9,17 +9,13 @@ describe('Setting breakpoints: The debugger', function() {
 	let dc: DebugClient;
 	const TESTDATA_PATH = path.join(__dirname, '../../testdata');
 
-	beforeEach(async function() {
-		dc = await util.initDebugClient(TESTDATA_PATH, false);
-	});
-
 	afterEach(async function() {
 		await dc.stop();
 	});
 
 	it('should provide breakpoint locations in sources without sourcemaps', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		const sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		const locations = await dc.customRequest('breakpointLocations', {
@@ -38,7 +34,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should eventually verify a breakpoint set on a loaded file', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 3 ], false);
@@ -57,7 +53,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should eventually move and verify a breakpoint set on a loaded file', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 2 ], false);
@@ -76,6 +72,8 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should eventually verify a breakpoint set before the page is loaded', async function() {
 
+		dc = await util.initDebugClient(TESTDATA_PATH, false);
+
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 3 ], false);
 
@@ -91,6 +89,8 @@ describe('Setting breakpoints: The debugger', function() {
 	});
 
 	it('should eventually move and verify a breakpoint set before the page is loaded', async function() {
+
+		dc = await util.initDebugClient(TESTDATA_PATH, false);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 2 ], false);
@@ -108,7 +108,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should eventually verify a breakpoint set on a dynamically loaded script', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/dlscript.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 3 ], false);
@@ -128,7 +128,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should keep old breakpoints verified when setting new ones', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		await util.setBreakpoints(dc, sourcePath, [ 3 ]);
@@ -143,7 +143,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should handle multiple setBreakpointsRequests in quick succession', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		util.setBreakpoints(dc, sourcePath, [ 11 ], false);
@@ -167,7 +167,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should remove a breakpoint', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		let setBreakpointsResponse = await util.setBreakpoints(dc, sourcePath, [ 3 ], false);
@@ -182,7 +182,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should add a condition to an already set breakpoint', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		await util.setBreakpoints(dc, sourcePath, [ { line: 24 } ]);
@@ -216,7 +216,7 @@ describe('Setting breakpoints: The debugger', function() {
 
 	it('should add a logMessage to an already set breakpoint', async function() {
 
-		await util.receivePageLoadedEvent(dc);
+		dc = await util.initDebugClient(TESTDATA_PATH, true);
 
 		let sourcePath = path.join(TESTDATA_PATH, 'web/main.js');
 		await util.setBreakpoints(dc, sourcePath, [ { line: 24 } ]);

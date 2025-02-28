@@ -58,6 +58,15 @@ export class RootActorProxy extends BaseActorProxy {
 		};
 	}
 
+	public async getProcess(id: number): Promise<DescriptorActorProxy> {
+		return this.sendCachedRequest(
+			`getProcess(${id})`,
+			{ type: 'getProcess', id },
+			(response: FirefoxDebugProtocol.GetProcessResponse) =>
+				new DescriptorActorProxy(response.processDescriptor.actor, 'process', this.connection)
+		)
+	}
+
 	public async fetchTabs(): Promise<Map<string, DescriptorActorProxy>> {
 		let tabsResponse: FirefoxDebugProtocol.TabsResponse = await this.sendRequest({ type: 'listTabs' });
 		while (tabsResponse.tabs.length === 0) {
@@ -80,7 +89,7 @@ export class RootActorProxy extends BaseActorProxy {
 
 				log.debug(`Tab ${tab.actor} opened`);
 
-				tabDescriptorActor = new DescriptorActorProxy(tab.actor, this.connection);
+				tabDescriptorActor = new DescriptorActorProxy(tab.actor, 'tab', this.connection);
 
 				this.emit('tabOpened', tabDescriptorActor);
 			}

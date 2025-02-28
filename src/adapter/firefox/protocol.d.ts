@@ -35,6 +35,7 @@ declare namespace FirefoxDebugProtocol {
 			watchpoints?: boolean,
 			webExtensionAddonConnect?: boolean,
 			noPauseOnThreadActorAttach?: boolean
+			supportsEnableWindowGlobalThreadActors?: boolean
 		};
 	}
 
@@ -42,6 +43,21 @@ declare namespace FirefoxDebugProtocol {
 		preferenceActor: string;
 		addonsActor?: string;
 		deviceActor: string;
+	}
+
+	interface GetProcessResponse {
+		processDescriptor: ProcessDescriptor;
+	}
+
+	interface ProcessDescriptor {
+		actor: string;
+		id: number;
+		isParent: boolean;
+		isWindowlessParent: boolean;
+		traits: {
+			watcher: boolean;
+			supportsReloadDescriptor: boolean;
+		}
 	}
 
 	interface TabsResponse extends Response {
@@ -354,13 +370,24 @@ declare namespace FirefoxDebugProtocol {
 	}
 
 	interface TargetAvailableEvent extends Event {
+		type: 'target-available-form';
 		target: {
 			url?: string;
 			actor: string;
 			consoleActor: string;
 			threadActor: string;
+			targetType?: 'process' | 'frame' | 'worker' | 'shared_worker' | 'service_worker' | 'content_script';
 			isTopLevelTarget?: boolean;
 			isFallbackExtensionDocument?: boolean;
+			// set for all frame targets
+			innerWindowId?: number;
+			// set for iframe targets
+			parentInnerWindowId?: number;
+			// set for all frame targets
+			topInnerWindowId?: number;
+			// set for worker targets
+			relatedDocumentInnerWindowId?: number;
+			addonId?: string;
 		};
 	}
 
