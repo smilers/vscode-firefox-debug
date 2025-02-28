@@ -1,3 +1,7 @@
+### Version 2.15.0
+* fix various issues when debugging multiple tabs
+* use the URL in thread names
+
 ### Version 2.14.1
 * fix truncated console messages
 * fix threads not showing up in the loaded scripts panel
